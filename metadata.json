@@ -1,0 +1,6 @@
+{
+  "name": "CarDeck",
+  "description": "Automotive landscape launcher inspired by Apple CarPlay (iOS 18+) with adaptive squircle icon masking, split-screen dashboard, universal media control, live GPS speedometer, headlight day/night sync, and live customization.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">CarDeck</string>
+    <string name="media_listener_service_name">CarDeck Media Bridge</string>
+
+    <!-- Onboarding & Permissions -->
+    <string name="onboarding_title">Welcome to CarPlay Mode</string>
+    <string name="onboarding_subtitle">Set up live GPS speed, universal media control, and default launcher access.</string>
+    <string name="onboarding_location_title">Location &amp; Live Speed (GPS)</string>
+    <string name="onboarding_location_desc">Powers the live speedometer, speed limit guard, and maps heading</string>
+    <string name="onboarding_media_title">Now Playing Media Sync</string>
+    <string name="onboarding_media_desc">Displays live track metadata and artwork from Spotify, Music, or Podcasts</string>
+    <string name="onboarding_home_title">Set as Default Launcher</string>
+    <string name="onboarding_home_desc">Automatically launch CarDeck when your head unit powers on</string>
+    <string name="action_grant">Allow</string>
+    <string name="action_granted">Enabled</string>
+    <string name="action_set_default">Configure</string>
+    <string name="action_start_driving">Continue</string>
+
+    <!-- Dock & Navigation -->
+    <string name="cd_dock_switch_view">Switch between Dashboard and App Grid</string>
+    <string name="cd_dock_settings">Settings</string>
+    <string name="cd_dock_voice">Voice Assistant</string>
+    <string name="cd_dock_oled_dimmer">OLED Night Dimmer</string>
+    <string name="cd_dock_split_app">Split Screen Apps</string>
+    <string name="cd_status_wifi">Wi-Fi Status</string>
+    <string name="cd_status_cellular">Cellular Signal</string>
+    <string name="cd_status_bluetooth">Bluetooth Status</string>
+    <string name="cd_status_gps">GPS Status</string>
+
+    <!-- Dashboard & Navigation Card -->
+    <string name="nav_search_placeholder">Search Maps…</string>
+    <string name="nav_go">Go</string>
+    <string name="nav_home">Home</string>
+    <string name="nav_work">Work</string>
+    <string name="nav_gas">Gas Stations</string>
+    <string name="nav_open_maps">Open Maps</string>
+    <string name="nav_gps_active">GPS Ready</string>
+    <string name="nav_gps_searching">Acquiring GPS…</string>
+
+    <!-- Media Controller -->
+    <string name="media_no_active">Not Playing</string>
+    <string name="media_tap_to_play">Play Spotify, Apple Music, or YouTube Music</string>
+    <string name="media_permission_needed">Enable Notification Access for Now Playing</string>
+    <string name="media_enable_access">Enable Access</string>
+    <string name="cd_media_prev">Previous</string>
+    <string name="cd_media_play_pause">Play or Pause</string>
+    <string name="cd_media_next">Next</string>
+
+    <!-- Smart Stack -->
+    <string name="stack_speed_title">Speedometer</string>
+    <string name="stack_speed_limit_alert">Over Limit (%1$d %2$s)</string>
+    <string name="stack_speed_safe">Speed Limit %1$d %2$s</string>
+    <string name="stack_unit_kmh">km/h</string>
+    <string name="stack_unit_mph">mph</string>
+    <string name="stack_calendar_title">Calendar</string>
+    <string name="stack_trip_elapsed">Drive Time</string>
+    <string name="stack_no_events">No Upcoming Events</string>
+    <string name="stack_connect_calendar">Connect</string>
+    <string name="stack_controls_title">Vehicle Controls</string>
+    <string name="control_bluetooth">Bluetooth</string>
+    <string name="control_wifi">Wi-Fi</string>
+    <string name="control_hotspot">Hotspot</string>
+    <string name="control_split_screen">Split View</string>
+
+    <!-- App Grid -->
+    <string name="app_grid_empty">No Visible Apps</string>
+    <string name="app_action_open">Open App</string>
+    <string name="app_action_pin_slot">Pin to Dock %1$d</string>
+    <string name="app_action_unpin">Unpin</string>
+    <string name="app_action_rename">Rename</string>
+    <string name="app_action_hide">Hide App</string>
+    <string name="app_action_move_left">Move Earlier</string>
+    <string name="app_action_move_right">Move Later</string>
+    <string name="app_action_split">Split Screen</string>
+    <string name="rename_dialog_title">Rename App</string>
+    <string name="rename_hint">Display Name</string>
+    <string name="action_save">Save</string>
+    <string name="action_cancel">Cancel</string>
+
+    <!-- Split App Picker -->
+    <string name="split_title">Split Screen Apps</string>
+    <string name="split_subtitle">Select two apps to launch side-by-side in multi-window mode.</string>
+    <string name="split_primary">Primary App</string>
+    <string name="split_secondary">Secondary App</string>
+    <string name="split_launch">Launch Split View</string>
+
+    <!-- OLED Night Dimmer -->
+    <string name="oled_tap_to_wake">Tap anywhere to wake CarPlay</string>
+
+    <!-- Valet Mode -->
+    <string name="valet_enter_pin">Enter Passcode</string>
+    <string name="valet_wrong_pin">Incorrect Passcode</string>
+
+    <!-- Settings Screen -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_cat_geometry">Display &amp; Layout</string>
+    <string name="settings_cat_appearance">Appearance &amp; Wallpaper</string>
+    <string name="settings_cat_apps">Apps &amp; Icon Packs</string>
+    <string name="settings_cat_navigation">Maps &amp; Speed Guard</string>
+    <string name="settings_cat_security">Valet Lock &amp; Backup</string>
+
+    <string name="setting_icon_size">Icon Size</string>
+    <string name="setting_corner_radius">Corner Radius</string>
+    <string name="setting_card_alpha">Card Opacity</string>
+    <string name="setting_font_scale">Text Size</string>
+    <string name="setting_dock_side">Driver Side (Dock)</string>
+    <string name="dock_left">Left</string>
+    <string name="dock_right">Right</string>
+
+    <string name="setting_day_night">Appearance</string>
+    <string name="mode_auto">Automatic</string>
+    <string name="mode_day">Always Light</string>
+    <string name="mode_night">Always Dark</string>
+    <string name="setting_wallpapers">Wallpaper</string>
+    <string name="wallpaper_ios18">iOS 18</string>
+    <string name="wallpaper_ios17">iOS 17</string>
+    <string name="wallpaper_obsidian">Pure Black</string>
+    <string name="wallpaper_custom">Custom</string>
+    <string name="action_pick_wallpaper">Choose Photo…</string>
+
+    <string name="setting_icon_packs">Icon Packs</string>
+    <string name="icon_pack_system">Apple CarPlay Default</string>
+    <string name="icon_pack_none">No external icon packs installed</string>
+    <string name="setting_hidden_apps">Hidden Apps</string>
+    <string name="action_unhide">Show</string>
+    <string name="setting_pinned_slots">Pinned Dock Slots</string>
+    <string name="action_clear_slot">Auto</string>
+
+    <string name="setting_nav_app">Navigation Provider</string>
+    <string name="setting_home_address">Home Destination</string>
+    <string name="setting_work_address">Work Destination</string>
+    <string name="setting_speed_guard">Speed Limit Alert</string>
+    <string name="setting_speed_limit">Speed Limit Threshold</string>
+    <string name="setting_speed_unit">Speed Unit</string>
+
+    <string name="setting_valet_mode">Valet Mode (Lock Settings)</string>
+    <string name="setting_valet_pin">Passcode (4 Digits)</string>
+    <string name="setting_backup_title">Backup &amp; Restore</string>
+    <string name="action_export_backup">Export Settings</string>
+    <string name="action_import_backup">Import Settings</string>
+    <string name="action_default_launcher">Default Home App</string>
+    <string name="backup_exported">Settings exported successfully</string>
+    <string name="backup_imported">Settings restored successfully</string>
+    <string name="backup_failed">Could not process backup file</string>
+</resources>
