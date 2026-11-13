@@ -24,31 +24,22 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Package Web App into Android APK
+      - name: Install dependencies and build web app
         run: |
-          mkdir -p /tmp/web_assets
-          cp -r ./* /tmp/web_assets/
-          rm -rf /tmp/web_assets/android /tmp/web_assets/node_modules /tmp/web_assets/.git /tmp/web_assets/.github
-          mv /tmp/web_assets ./www
+          npm install
+          npm run build
 
-          npm init -y
-          npm install @capacitor/core @capacitor/cli @capacitor/android --legacy-peer-deps
-          npx cap init "CarDeck" "com.cardeck.launcher" --web-dir="www"
+      - name: Convert Web App to Android APK
+        run: |
+          npm install @capacitor/core @capacitor/cli @capacitor/android
+          npx cap init "CarPlay" "com.carplay.launcher" --web-dir=dist
           npx cap add android
-          npx cap sync android
-
-          MANIFEST="android/app/src/main/AndroidManifest.xml"
-          sed -i 's/<category android:name="android.intent.category.LAUNCHER" \/>/<category android:name="android.intent.category.LAUNCHER" \/>\n                <category android:name="android.intent.category.HOME" \/>\n                <category android:name="android.intent.category.DEFAULT" \/>/g' "$MANIFEST"
-
           cd android
           chmod +x gradlew
           ./gradlew assembleDebug
 
-          mkdir -p "$GITHUB_WORKSPACE/output_apk"
-          cp app/build/outputs/apk/debug/app-debug.apk "$GITHUB_WORKSPACE/output_apk/CarDeck.apk"
-
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: CarDeck-APK
-          path: output_apk/CarDeck.apk
+          name: CarPlay-Launcher-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
