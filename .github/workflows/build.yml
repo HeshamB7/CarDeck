@@ -1,0 +1,54 @@
+name: Build CarPlay APK
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Package Web App into Android APK
+        run: |
+          mkdir -p /tmp/web_assets
+          cp -r ./* /tmp/web_assets/
+          rm -rf /tmp/web_assets/android /tmp/web_assets/node_modules /tmp/web_assets/.git /tmp/web_assets/.github
+          mv /tmp/web_assets ./www
+
+          npm init -y
+          npm install @capacitor/core @capacitor/cli @capacitor/android --legacy-peer-deps
+          npx cap init "CarDeck" "com.cardeck.launcher" --web-dir="www"
+          npx cap add android
+          npx cap sync android
+
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          sed -i 's/<category android:name="android.intent.category.LAUNCHER" \/>/<category android:name="android.intent.category.LAUNCHER" \/>\n                <category android:name="android.intent.category.HOME" \/>\n                <category android:name="android.intent.category.DEFAULT" \/>/g' "$MANIFEST"
+
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+          mkdir -p "$GITHUB_WORKSPACE/output_apk"
+          cp app/build/outputs/apk/debug/app-debug.apk "$GITHUB_WORKSPACE/output_apk/CarDeck.apk"
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: CarDeck-APK
+          path: output_apk/CarDeck.apk
