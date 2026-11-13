@@ -67,4 +67,26 @@ class ExampleRobolectricTest {
             assertEquals(128, bmp.height)
         }
     }
+
+    @Test
+    fun `squircle path bounds stay within square and avoid zero area`() {
+        val path = com.example.ui.components.createSquirclePath(100f, 100f)
+        val bounds = path.getBounds()
+        org.junit.Assert.assertFalse(bounds.isEmpty)
+        assertTrue(bounds.left >= -0.5f && bounds.top >= -0.5f)
+        assertTrue(bounds.right <= 100.5f && bounds.bottom <= 100.5f)
+    }
+
+    @Test
+    fun `dashboard pages and quick contacts serialize round trip`() {
+        val pages = com.example.model.defaultDashboardPages()
+        val encodedPages = com.example.data.LauncherPreferencesRepository.encodeDashboardPages(pages)
+        val decodedPages = com.example.data.LauncherPreferencesRepository.decodeDashboardPages(encodedPages)
+        assertEquals(pages, decodedPages)
+
+        val contacts = com.example.model.defaultQuickContacts()
+        val encodedContacts = com.example.data.LauncherPreferencesRepository.encodeQuickContacts(contacts)
+        val decodedContacts = com.example.data.LauncherPreferencesRepository.decodeQuickContacts(encodedContacts)
+        assertEquals(contacts, decodedContacts)
+    }
 }

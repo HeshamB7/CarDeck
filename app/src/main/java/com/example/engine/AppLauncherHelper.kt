@@ -166,6 +166,36 @@ object AppLauncherHelper {
         }
     }
 
+    fun launchCoordinatesNavigation(
+        context: Context,
+        latitude: Double,
+        longitude: Double,
+        provider: NavigationProvider
+    ) {
+        val uri = when (provider) {
+            NavigationProvider.GOOGLE_MAPS -> Uri.parse("google.navigation:q=$latitude,$longitude&mode=w")
+            NavigationProvider.WAZE -> Uri.parse("https://waze.com/ul?ll=$latitude,$longitude&navigate=yes")
+        }
+        val intent = Intent(Intent.ACTION_VIEW, uri).apply {
+            setPackage(provider.packageName)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        val launched = runCatching {
+            context.startActivity(intent)
+            true
+        }.getOrDefault(false)
+
+        if (!launched) {
+            val fallback = Intent(
+                Intent.ACTION_VIEW,
+                Uri.parse("geo:$latitude,$longitude?q=$latitude,$longitude(Parked+Car)")
+            ).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            runCatching { context.startActivity(fallback) }
+        }
+    }
+
     fun openMapApp(context: Context, provider: NavigationProvider) {
         if (!launchApp(context, provider.packageName)) {
             val fallback = Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0")).apply {
@@ -241,5 +271,17 @@ object AppLauncherHelper {
                 }
             )
         }
+    }
+
+    fun dialPhoneNumber(context: Context, phoneNumber: String): Boolean {
+        val clean = phoneNumber.trim()
+        if (clean.isEmpty()) return false
+        val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:${Uri.encode(clean)}")).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        return runCatching {
+            context.startActivity(intent)
+            true
+        }.getOrDefault(false)
     }
 }

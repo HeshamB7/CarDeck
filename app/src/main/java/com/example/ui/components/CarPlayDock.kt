@@ -5,7 +5,6 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -14,24 +13,15 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Apps
-import androidx.compose.material.icons.rounded.Bedtime
-import androidx.compose.material.icons.rounded.Settings
-import androidx.compose.material.icons.rounded.Wifi
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -39,13 +29,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -57,7 +51,7 @@ import com.example.R
 import com.example.model.AppEntry
 import com.example.model.LauncherScreen
 import com.example.model.SystemStatusState
-import com.example.ui.theme.CarDisplayFontFamily
+import com.example.ui.theme.LocalCarPlayTypography
 import com.example.ui.theme.LocalCarTokens
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -70,150 +64,183 @@ fun CarPlayDock(
     currentScreen: LauncherScreen,
     cardAlpha: Float,
     onAppClick: (AppEntry) -> Unit,
-    onAppLongClick: (AppEntry) -> Unit,
+    onSlotLongClick: (Int) -> Unit,
     onSwitchViewClick: () -> Unit,
     onVoiceClick: () -> Unit,
     onOledDimmerClick: () -> Unit,
     onSettingsClick: () -> Unit,
+    onDockBoundsChanged: (Rect) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val tokens = LocalCarTokens.current
-    val dockBg = tokens.dockBackground.copy(alpha = (cardAlpha + 0.08f).coerceIn(0.65f, 0.92f))
+    val type = LocalCarPlayTypography.current
+    val dockGlassAlpha = (cardAlpha * 0.58f).coerceIn(0.32f, 0.68f)
+    val dockBg = tokens.dockBackground.copy(alpha = dockGlassAlpha)
+    val glassSheenTop = if (tokens.isNight) Color.White.copy(alpha = 0.14f) else Color.White.copy(alpha = 0.42f)
+    val glassSheenMid = if (tokens.isNight) Color.White.copy(alpha = 0.04f) else Color.White.copy(alpha = 0.14f)
+    val glassSheenBot = if (tokens.isNight) Color.Black.copy(alpha = 0.20f) else Color.White.copy(alpha = 0.24f)
+    val glassRimColor = if (tokens.isNight) Color.White.copy(alpha = 0.24f) else Color.White.copy(alpha = 0.72f)
+    val dockShape = RoundedCornerShape(24.dp)
 
-    Column(
+    BoxWithConstraints(
         modifier = modifier
-            .width(82.dp)
             .fillMaxHeight()
             .padding(vertical = 8.dp, horizontal = 6.dp)
-            .clip(RoundedCornerShape(24.dp))
+            .onGloballyPositioned { coords ->
+                onDockBoundsChanged(coords.boundsInRoot())
+            }
+            .shadow(
+                elevation = if (tokens.isNight) 12.dp else 8.dp,
+                shape = dockShape,
+                ambientColor = Color.Black.copy(alpha = 0.30f)
+            )
+            .clip(dockShape)
             .background(dockBg)
-            .border(0.75.dp, tokens.cardBorder, RoundedCornerShape(24.dp))
-            .padding(vertical = 12.dp, horizontal = 6.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.SpaceBetween
+            .background(
+                Brush.verticalGradient(
+                    listOf(glassSheenTop, glassSheenMid, glassSheenBot)
+                )
+            )
+            .border(1.dp, glassRimColor, dockShape)
     ) {
-        // Top: Exact Apple CarPlay Status Bar (Clock + 4 Signal Bars + 5G/Wi-Fi)
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(5.dp)
-        ) {
-            Text(
-                text = systemStatus.timeText,
-                style = MaterialTheme.typography.titleMedium.copy(
-                    fontFamily = CarDisplayFontFamily,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 19.sp,
-                    fontFeatureSettings = "tnum",
-                    letterSpacing = (-0.4).sp
-                ),
-                color = MaterialTheme.colorScheme.onSurface
-            )
+        val slotSize = (maxWidth * 0.72f).coerceIn(40.dp, 54.dp)
+        val slotGap = (maxHeight * 0.022f).coerceIn(6.dp, 14.dp)
+        val utilityBtnSize = (maxWidth * 0.40f).coerceIn(26.dp, 32.dp)
+        val compactHeight = maxHeight < 440.dp
 
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(5.dp),
-                verticalAlignment = Alignment.CenterVertically
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(vertical = if (compactHeight) 8.dp else 12.dp, horizontal = 4.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            // Top: Authentic Apple CarPlay Status Cluster (SF Pro Clock + Signal + 5G/Wi-Fi)
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(3.dp)
             ) {
-                AppleSignalBars(
-                    connected = systemStatus.isCellularConnected || systemStatus.isWifiConnected,
-                    activeColor = MaterialTheme.colorScheme.onSurface,
-                    inactiveColor = tokens.secondaryText.copy(alpha = 0.35f),
-                    contentDesc = stringResource(R.string.cd_status_cellular)
+                CarPlayText(
+                    text = systemStatus.timeText,
+                    style = type.dockClock,
+                    color = tokens.primaryText,
+                    maxLines = 1
                 )
-                if (systemStatus.isWifiConnected) {
-                    Icon(
-                        imageVector = Icons.Rounded.Wifi,
-                        contentDescription = stringResource(R.string.cd_status_wifi),
-                        tint = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.size(13.dp)
-                    )
-                } else {
-                    Text(
-                        text = if (systemStatus.isCellularConnected) "5G" else "SOS",
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold
-                        ),
-                        color = if (systemStatus.isCellularConnected) MaterialTheme.colorScheme.onSurface
-                        else tokens.secondaryText.copy(alpha = 0.7f)
-                    )
-                }
-            }
-        }
 
-        // Middle: 3 Authentic CarPlay Squircle Recent/Pinned Slots
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            dockSlotApps.forEachIndexed { idx, app ->
-                DockAppSlotItem(
-                    app = app,
-                    icon = app?.let { icons[it.packageName] },
-                    slotIndex = idx,
-                    onClick = { app?.let(onAppClick) },
-                    onLongClick = { app?.let(onAppLongClick) }
-                )
-            }
-        }
-
-        // Bottom: Siri Orb + Subtle Dimmer/Settings + Iconic CarPlay Home/Grid Switcher
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(30.dp)
-                        .minimumInteractiveComponentSize()
-                        .clip(CircleShape)
-                        .background(tokens.pillBackground.copy(alpha = 0.55f))
-                        .testTag("dock_oled_dimmer_button")
-                        .clickable(onClick = onOledDimmerClick),
-                    contentAlignment = Alignment.Center
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Bedtime,
-                        contentDescription = stringResource(R.string.cd_dock_oled_dimmer),
-                        tint = tokens.secondaryText,
-                        modifier = Modifier.size(16.dp)
+                    AppleSignalBars(
+                        connected = systemStatus.isCellularConnected || systemStatus.isWifiConnected,
+                        activeColor = tokens.primaryText,
+                        inactiveColor = tokens.secondaryText.copy(alpha = 0.35f),
+                        contentDesc = stringResource(R.string.cd_status_cellular)
                     )
-                }
-
-                Box(
-                    modifier = Modifier
-                        .size(30.dp)
-                        .minimumInteractiveComponentSize()
-                        .clip(CircleShape)
-                        .background(
-                            if (currentScreen == LauncherScreen.SETTINGS) tokens.accentBlue.copy(alpha = 0.25f)
-                            else tokens.pillBackground.copy(alpha = 0.55f)
+                    if (systemStatus.isWifiConnected) {
+                        CarPlaySymbol(
+                            type = CarPlaySymbolType.WIFI,
+                            tint = tokens.primaryText,
+                            modifier = Modifier.size(12.dp)
                         )
-                        .testTag("dock_settings_button")
-                        .clickable(onClick = onSettingsClick),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Settings,
-                        contentDescription = stringResource(R.string.cd_dock_settings),
-                        tint = if (currentScreen == LauncherScreen.SETTINGS) tokens.accentBlue
-                        else tokens.secondaryText,
-                        modifier = Modifier.size(16.dp)
+                    } else {
+                        CarPlayText(
+                            text = if (systemStatus.isCellularConnected) "5G" else "LTE",
+                            style = type.micro.copy(fontSize = 9.5.sp, fontWeight = FontWeight.Bold),
+                            color = if (systemStatus.isCellularConnected) tokens.primaryText
+                            else tokens.secondaryText.copy(alpha = 0.75f)
+                        )
+                    }
+                }
+            }
+
+            // Middle: 3 Authentic CarPlay Squircle Recent/Pinned Slots (Long press any slot to replace app)
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(slotGap)
+            ) {
+                for (idx in 0..2) {
+                    val app = dockSlotApps.getOrNull(idx)
+                    val isPinned = pinnedPackages.getOrNull(idx) != null
+                    DockAppSlotItem(
+                        app = app,
+                        icon = app?.let { icons[it.packageName] },
+                        slotSize = slotSize,
+                        slotIndex = idx,
+                        isPinned = isPinned,
+                        onClick = {
+                            if (app != null) onAppClick(app) else onSlotLongClick(idx)
+                        },
+                        onLongClick = { onSlotLongClick(idx) }
                     )
                 }
             }
 
-            // Siri-style Glowing Voice Orb
-            SiriVoiceOrbButton(onClick = onVoiceClick)
+            // Bottom: OLED Dimmer + Settings Pills, Siri Orb, and App Grid Switcher at bottom
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(if (compactHeight) 5.dp else 8.dp)
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val dimmerDesc = stringResource(R.string.cd_dock_oled_dimmer)
+                    Box(
+                        modifier = Modifier
+                            .size(utilityBtnSize)
+                            .clip(CircleShape)
+                            .background(tokens.pillBackground.copy(alpha = 0.56f))
+                            .testTag("dock_oled_dimmer_button")
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onClick = onOledDimmerClick
+                            )
+                            .semantics { contentDescription = dimmerDesc },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CarPlaySymbol(
+                            type = CarPlaySymbolType.MOON,
+                            tint = tokens.secondaryText,
+                            modifier = Modifier.size(utilityBtnSize * 0.52f)
+                        )
+                    }
 
-            // Authentic Apple CarPlay Home / App Grid Button
-            CarPlayViewSwitcherButton(
-                isDashboard = currentScreen == LauncherScreen.DASHBOARD,
-                onClick = onSwitchViewClick
-            )
+                    val settingsDesc = stringResource(R.string.cd_dock_settings)
+                    Box(
+                        modifier = Modifier
+                            .size(utilityBtnSize)
+                            .clip(CircleShape)
+                            .background(
+                                if (currentScreen == LauncherScreen.SETTINGS) tokens.accentBlue.copy(alpha = 0.25f)
+                                else tokens.pillBackground.copy(alpha = 0.56f)
+                            )
+                            .testTag("dock_settings_button")
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onClick = onSettingsClick
+                            )
+                            .semantics { contentDescription = settingsDesc },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CarPlaySymbol(
+                            type = CarPlaySymbolType.SETTINGS_GEAR,
+                            tint = if (currentScreen == LauncherScreen.SETTINGS) tokens.accentBlue
+                            else tokens.secondaryText,
+                            modifier = Modifier.size(utilityBtnSize * 0.54f)
+                        )
+                    }
+                }
+
+                SiriVoiceOrbButton(onClick = onVoiceClick)
+
+                CarPlayViewSwitcherButton(
+                    isDashboard = currentScreen == LauncherScreen.DASHBOARD,
+                    onClick = onSwitchViewClick
+                )
+            }
         }
     }
 }
@@ -227,7 +254,7 @@ private fun AppleSignalBars(
 ) {
     Canvas(
         modifier = Modifier
-            .size(width = 16.dp, height = 11.dp)
+            .size(width = 16.dp, height = 10.dp)
             .semantics { contentDescription = contentDesc }
     ) {
         val barWidth = size.width / 6.2f
@@ -236,7 +263,7 @@ private fun AppleSignalBars(
         heights.forEachIndexed { idx, frac ->
             val h = size.height * frac
             val x = idx * (barWidth + gap)
-            val color = if (connected && idx < 3) activeColor else if (connected) activeColor else inactiveColor
+            val color = if (connected) activeColor else if (idx < 2) activeColor.copy(alpha = 0.45f) else inactiveColor
             drawRoundRect(
                 color = color,
                 topLeft = Offset(x, size.height - h),
@@ -250,17 +277,28 @@ private fun AppleSignalBars(
 @Composable
 private fun SiriVoiceOrbButton(onClick: () -> Unit) {
     val voiceDesc = stringResource(R.string.cd_dock_voice)
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.88f else 1f,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "siri_scale"
+    )
     Box(
         modifier = Modifier
             .size(40.dp)
-            .minimumInteractiveComponentSize()
+            .scale(scale)
             .clip(CircleShape)
             .testTag("dock_voice_button")
-            .clickable(onClick = onClick)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            )
             .semantics { contentDescription = voiceDesc },
         contentAlignment = Alignment.Center
     ) {
-        Canvas(modifier = Modifier.size(30.dp)) {
+        Canvas(modifier = Modifier.size(28.dp)) {
             drawCircle(
                 brush = Brush.sweepGradient(
                     listOf(
@@ -271,7 +309,7 @@ private fun SiriVoiceOrbButton(onClick: () -> Unit) {
                         Color(0xFF00C2FF)
                     )
                 ),
-                style = Stroke(width = 3.2.dp.toPx())
+                style = Stroke(width = 3.dp.toPx())
             )
             drawCircle(
                 brush = Brush.radialGradient(
@@ -292,7 +330,9 @@ private fun SiriVoiceOrbButton(onClick: () -> Unit) {
 private fun DockAppSlotItem(
     app: AppEntry?,
     icon: ImageBitmap?,
+    slotSize: androidx.compose.ui.unit.Dp,
     slotIndex: Int,
+    isPinned: Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit
 ) {
@@ -307,37 +347,46 @@ private fun DockAppSlotItem(
 
     Box(
         modifier = Modifier
-            .size(50.dp)
+            .size(slotSize)
             .scale(scale)
             .testTag("dock_slot_$slotIndex")
             .combinedClickable(
                 interactionSource = interactionSource,
                 indication = null,
-                enabled = app != null,
                 onClick = onClick,
                 onLongClick = onLongClick
             ),
         contentAlignment = Alignment.Center
     ) {
-        if (icon != null && app != null) {
-            Image(
+        if (app != null) {
+            CarPlaySquircleIcon(
+                app = app,
                 bitmap = icon,
-                contentDescription = app.displayName,
-                modifier = Modifier.fillMaxSize()
+                size = slotSize,
+                elevation = 4.dp
             )
+            if (isPinned) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 1.dp)
+                        .size(width = 10.dp, height = 2.5.dp)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.72f))
+                )
+            }
         } else {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .clip(RoundedCornerShape(13.dp))
+                    .clip(AppleSquircleShape)
                     .background(tokens.pillBackground.copy(alpha = 0.5f)),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = Icons.Rounded.Apps,
-                    contentDescription = null,
-                    tint = tokens.secondaryText.copy(alpha = 0.45f),
-                    modifier = Modifier.size(22.dp)
+                CarPlaySymbol(
+                    type = CarPlaySymbolType.PLUS,
+                    tint = tokens.secondaryText.copy(alpha = 0.65f),
+                    modifier = Modifier.size(slotSize * 0.42f)
                 )
             }
         }
@@ -349,25 +398,36 @@ private fun CarPlayViewSwitcherButton(
     isDashboard: Boolean,
     onClick: () -> Unit
 ) {
-    val fgColor = MaterialTheme.colorScheme.onSurface
+    val tokens = LocalCarTokens.current
+    val fgColor = tokens.primaryText
     val switchDesc = stringResource(R.string.cd_dock_switch_view)
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.88f else 1f,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "switcher_scale"
+    )
 
     Box(
         modifier = Modifier
-            .size(48.dp)
-            .minimumInteractiveComponentSize()
+            .size(46.dp)
+            .scale(scale)
             .clip(CircleShape)
             .testTag("dock_view_switcher")
-            .clickable(onClick = onClick)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            )
             .semantics { contentDescription = switchDesc },
         contentAlignment = Alignment.Center
     ) {
-        Canvas(modifier = Modifier.size(23.dp)) {
+        Canvas(modifier = Modifier.size(22.dp)) {
             if (isDashboard) {
-                // Iconic Apple CarPlay 3x3 / 2x4 rounded squares glyph
                 val cols = 3
                 val rows = 3
-                val cell = size.width * 0.24f
+                val cell = size.width * 0.25f
                 val gap = (size.width - cell * cols) / (cols - 1)
                 val r = CornerRadius(2.dp.toPx(), 2.dp.toPx())
                 for (row in 0 until rows) {
@@ -381,7 +441,6 @@ private fun CarPlayViewSwitcherButton(
                     }
                 }
             } else {
-                // Iconic Apple CarPlay Dashboard Split-View glyph
                 val r = CornerRadius(3.dp.toPx(), 3.dp.toPx())
                 val leftW = size.width * 0.52f
                 val rightW = size.width * 0.36f

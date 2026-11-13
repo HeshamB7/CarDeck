@@ -1,45 +1,44 @@
 package com.example.ui.components
 
-import android.os.Build
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.FastForward
-import androidx.compose.material.icons.rounded.FastRewind
-import androidx.compose.material.icons.rounded.MusicNote
-import androidx.compose.material.icons.rounded.Pause
-import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -47,9 +46,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.R
+import com.example.engine.BitmapBlurUtils
 import com.example.model.MediaPlaybackState
-import com.example.ui.theme.CarDisplayFontFamily
+import com.example.ui.theme.LocalCarPlayTypography
 import com.example.ui.theme.LocalCarTokens
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @Composable
 fun UniversalMediaCard(
@@ -64,25 +66,56 @@ fun UniversalMediaCard(
     modifier: Modifier = Modifier
 ) {
     val tokens = LocalCarTokens.current
-    val shape = RoundedCornerShape(cornerRadiusDp.dp)
-    val artBitmap = mediaState.albumArt?.asImageBitmap()
+    val type = LocalCarPlayTypography.current
+    val artBitmap = remember(mediaState.albumArt) { mediaState.albumArt?.asImageBitmap() }
+    val frostedArt by produceState<ImageBitmap?>(initialValue = null, mediaState.albumArt) {
+        value = mediaState.albumArt?.let { raw ->
+            withContext(Dispatchers.Default) {
+                BitmapBlurUtils.createFrostedBitmap(raw, targetWidth = 72, radius = 6).asImageBitmap()
+            }
+        }
+    }
 
-    Box(
+    var swipeDragOffset by remember { mutableFloatStateOf(0f) }
+    val animatedOffset by animateFloatAsState(
+        targetValue = swipeDragOffset.coerceIn(-42f, 42f),
+        animationSpec = spring(dampingRatio = 0.78f, stiffness = Spring.StiffnessMedium),
+        label = "media_swipe_offset"
+    )
+
+    CarPlayGlassCard(
+        cornerRadius = cornerRadiusDp.dp,
+        cardAlpha = cardAlpha,
         modifier = modifier
-            .clip(shape)
-            .background(tokens.cardBackground.copy(alpha = cardAlpha))
-            .border(0.75.dp, tokens.cardBorder, shape)
-            .clickable(enabled = mediaState.hasActiveSession, onClick = onOpenMediaApp)
+            .pointerInput(mediaState.hasNotificationPermission) {
+                if (!mediaState.hasNotificationPermission) return@pointerInput
+                detectHorizontalDragGestures(
+                    onDragEnd = {
+                        if (swipeDragOffset <= -56f) onNext()
+                        else if (swipeDragOffset >= 56f) onPrevious()
+                        swipeDragOffset = 0f
+                    },
+                    onDragCancel = { swipeDragOffset = 0f }
+                ) { change, dragAmount ->
+                    change.consume()
+                    swipeDragOffset += dragAmount * 0.45f
+                }
+            }
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                enabled = mediaState.hasActiveSession,
+                onClick = onOpenMediaApp
+            )
     ) {
-        if (artBitmap != null) {
+        if (frostedArt != null) {
             Image(
-                bitmap = artBitmap,
+                bitmap = frostedArt!!,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
                     .fillMaxSize()
-                    .let { if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) it.blur(28.dp) else it }
-                    .alpha(if (tokens.isNight) 0.36f else 0.22f)
+                    .alpha(if (tokens.isNight) 0.42f else 0.24f)
             )
             Box(
                 modifier = Modifier
@@ -90,20 +123,23 @@ fun UniversalMediaCard(
                     .background(
                         Brush.verticalGradient(
                             listOf(
-                                tokens.cardBackground.copy(alpha = 0.42f),
-                                tokens.cardBackground.copy(alpha = 0.86f)
+                                tokens.cardBackground.copy(alpha = 0.36f),
+                                tokens.cardBackground.copy(alpha = 0.84f)
                             )
                         )
                     )
             )
         }
 
-        Column(
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(14.dp),
-            verticalArrangement = Arrangement.SpaceBetween
+                .graphicsLayer { translationX = animatedOffset }
+                .padding(14.dp)
         ) {
+            val isCompact = maxHeight < 148.dp
+            val artSize = (maxHeight * 0.38f).coerceIn(46.dp, 60.dp)
+
             if (!mediaState.hasNotificationPermission) {
                 Row(
                     modifier = Modifier.fillMaxSize(),
@@ -112,162 +148,152 @@ fun UniversalMediaCard(
                 ) {
                     Column(
                         modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                        verticalArrangement = Arrangement.spacedBy(3.dp)
                     ) {
-                        Text(
+                        CarPlayText(
                             text = stringResource(R.string.media_no_active),
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurface
+                            style = type.rowTitle,
+                            color = tokens.primaryText
                         )
-                        Text(
+                        CarPlayText(
                             text = stringResource(R.string.media_permission_needed),
-                            style = MaterialTheme.typography.bodyMedium,
+                            style = type.bodySecondary,
                             color = tokens.secondaryText,
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis
                         )
                     }
                     Spacer(Modifier.width(10.dp))
-                    Button(
+                    CarPlayButton(
                         onClick = onGrantMediaAccess,
-                        colors = ButtonDefaults.buttonColors(containerColor = tokens.accentBlue),
                         modifier = Modifier.testTag("media_grant_permission_button")
                     ) {
-                        Text(stringResource(R.string.media_enable_access))
+                        CarPlayText(
+                            text = stringResource(R.string.media_enable_access),
+                            style = type.controlLabel,
+                            color = Color.White
+                        )
                     }
                 }
             } else {
-                // Apple CarPlay Now Playing Header: Square Album Art + Track/Artist
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(58.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(
-                                Brush.verticalGradient(
-                                    listOf(Color(0xFFFC5C76), Color(0xFFFA233B))
+                    // Header: Album Art + Track / Artist
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(artSize)
+                                .clip(RoundedCornerShape(11.dp))
+                                .background(
+                                    Brush.verticalGradient(
+                                        listOf(Color(0xFFFA5C72), Color(0xFFFA233B))
+                                    )
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (artBitmap != null) {
+                                Image(
+                                    bitmap = artBitmap,
+                                    contentDescription = mediaState.album,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
                                 )
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (artBitmap != null) {
-                            Image(
-                                bitmap = artBitmap,
-                                contentDescription = mediaState.album,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        } else {
-                            Icon(
-                                imageVector = Icons.Rounded.MusicNote,
-                                contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.size(30.dp)
-                            )
+                            } else {
+                                CarPlaySymbol(
+                                    type = CarPlaySymbolType.MUSIC_NOTE,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(artSize * 0.52f)
+                                )
+                            }
                         }
-                    }
 
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(2.dp)
-                    ) {
-                        Text(
-                            text = mediaState.title.ifBlank { stringResource(R.string.media_no_active) },
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Text(
-                            text = mediaState.artist.ifBlank { stringResource(R.string.media_tap_to_play) },
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = tokens.secondaryText,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        if (mediaState.sourceAppName.isNotBlank()) {
-                            Text(
-                                text = mediaState.sourceAppName,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = tokens.alertRed,
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            CarPlayText(
+                                text = mediaState.title.ifBlank { stringResource(R.string.media_no_active) },
+                                style = type.rowTitle.copy(fontWeight = FontWeight.Bold),
+                                color = tokens.primaryText,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
+                            CarPlayText(
+                                text = mediaState.artist.ifBlank { stringResource(R.string.media_tap_to_play) },
+                                style = type.bodySecondary,
+                                color = tokens.secondaryText,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            if (!isCompact && mediaState.sourceAppName.isNotBlank()) {
+                                CarPlayText(
+                                    text = mediaState.sourceAppName,
+                                    style = type.micro,
+                                    color = tokens.alertRed,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
                         }
                     }
-                }
 
-                // Thin Apple Music Scrubber Bar
-                val progress = if (mediaState.durationMs > 0L) {
-                    (mediaState.positionMs.toFloat() / mediaState.durationMs.toFloat()).coerceIn(0f, 1f)
-                } else 0f
+                    // Thin Apple Music Scrubber Bar
+                    val progress = if (mediaState.durationMs > 0L) {
+                        (mediaState.positionMs.toFloat() / mediaState.durationMs.toFloat()).coerceIn(0f, 1f)
+                    } else 0f
 
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    LinearProgressIndicator(
-                        progress = { progress },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(4.dp)
-                            .clip(CircleShape),
-                        color = MaterialTheme.colorScheme.onSurface,
-                        trackColor = tokens.secondaryText.copy(alpha = 0.25f)
-                    )
-                    if (mediaState.durationMs > 0L) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                text = formatDuration(mediaState.positionMs),
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontFamily = CarDisplayFontFamily,
-                                    fontFeatureSettings = "tnum"
-                                ),
-                                color = tokens.secondaryText
-                            )
-                            Text(
-                                text = formatDuration(mediaState.durationMs),
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontFamily = CarDisplayFontFamily,
-                                    fontFeatureSettings = "tnum"
-                                ),
-                                color = tokens.secondaryText
-                            )
+                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        CarPlayProgressBar(progress = progress)
+                        if (!isCompact && mediaState.durationMs > 0L) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                CarPlayText(
+                                    text = formatDuration(mediaState.positionMs),
+                                    style = type.micro,
+                                    color = tokens.secondaryText
+                                )
+                                CarPlayText(
+                                    text = formatDuration(mediaState.durationMs),
+                                    style = type.micro,
+                                    color = tokens.secondaryText
+                                )
+                            }
                         }
                     }
-                }
 
-                // Clean Apple CarPlay Transport Row
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    MediaTransportButton(
-                        icon = Icons.Rounded.FastRewind,
-                        contentDescription = stringResource(R.string.cd_media_prev),
-                        testTag = "media_prev_button",
-                        isPrimary = false,
-                        onClick = onPrevious
-                    )
-                    MediaTransportButton(
-                        icon = if (mediaState.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                        contentDescription = stringResource(R.string.cd_media_play_pause),
-                        testTag = "media_play_pause_button",
-                        isPrimary = true,
-                        onClick = onPlayPause
-                    )
-                    MediaTransportButton(
-                        icon = Icons.Rounded.FastForward,
-                        contentDescription = stringResource(R.string.cd_media_next),
-                        testTag = "media_next_button",
-                        isPrimary = false,
-                        onClick = onNext
-                    )
+                    // Spacious CarPlay Transport Row
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        MediaTransportButton(
+                            symbol = CarPlaySymbolType.PREV_TRACK,
+                            testTag = "media_prev_button",
+                            isPrimary = false,
+                            onClick = onPrevious
+                        )
+                        MediaTransportButton(
+                            symbol = if (mediaState.isPlaying) CarPlaySymbolType.PAUSE else CarPlaySymbolType.PLAY,
+                            testTag = "media_play_pause_button",
+                            isPrimary = true,
+                            onClick = onPlayPause
+                        )
+                        MediaTransportButton(
+                            symbol = CarPlaySymbolType.NEXT_TRACK,
+                            testTag = "media_next_button",
+                            isPrimary = false,
+                            onClick = onNext
+                        )
+                    }
                 }
             }
         }
@@ -276,28 +302,37 @@ fun UniversalMediaCard(
 
 @Composable
 private fun MediaTransportButton(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    contentDescription: String,
+    symbol: CarPlaySymbolType,
     testTag: String,
     isPrimary: Boolean,
     onClick: () -> Unit
 ) {
     val tokens = LocalCarTokens.current
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.86f else 1f,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "media_btn_scale"
+    )
     Box(
         modifier = Modifier
-            .size(if (isPrimary) 52.dp else 48.dp)
-            .minimumInteractiveComponentSize()
+            .size(if (isPrimary) 46.dp else 42.dp)
+            .scale(scale)
             .clip(CircleShape)
             .background(if (isPrimary) tokens.pillBackground.copy(alpha = 0.85f) else Color.Transparent)
             .testTag(testTag)
-            .clickable(onClick = onClick),
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            ),
         contentAlignment = Alignment.Center
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = contentDescription,
-            tint = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.size(if (isPrimary) 30.dp else 26.dp)
+        CarPlaySymbol(
+            type = symbol,
+            tint = tokens.primaryText,
+            modifier = Modifier.size(if (isPrimary) 24.dp else 22.dp)
         )
     }
 }

@@ -8,9 +8,13 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.LauncherPreferencesRepository
 import com.example.engine.AppLauncherHelper
+import com.example.engine.DriverAssistUtils
 import com.example.engine.IconProcessor
 import com.example.engine.TelemetryManager
 import com.example.model.AppEntry
+import com.example.model.CarWidgetType
+import com.example.model.DashboardPageConfig
+import com.example.model.DashboardWidgetItem
 import com.example.model.DayNightMode
 import com.example.model.DockSide
 import com.example.model.IconPackInfo
@@ -18,22 +22,123 @@ import com.example.model.LauncherPreferences
 import com.example.model.LauncherScreen
 import com.example.model.MediaPlaybackState
 import com.example.model.NavigationProvider
+import com.example.model.QuickContact
 import com.example.model.SpeedUnit
 import com.example.model.SystemStatusState
 import com.example.model.TelemetryState
 import com.example.model.WallpaperPreset
+import com.example.model.defaultDashboardPages
 import com.example.service.CarMediaNotificationListenerService
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.util.UUID
+
+data class BannerNotice(
+    val id: String = UUID.randomUUID().toString(),
+    val message: String,
+    val isWarning: Boolean = false
+)
 
 sealed interface ValetAction {
     data object OpenSettings : ValetAction
     data class EditApp(val app: AppEntry) : ValetAction
+    data class CustomizeDockSlot(val slotIndex: Int) : ValetAction
+    data object ToggleWidgetEdit : ValetAction
+}
+
+object DashboardPageMutator {
+    fun addPage(pages: List<DashboardPageConfig>, newId: String = "page_${UUID.randomUUID().toString().take(8)}"): List<DashboardPageConfig> {
+        val nextNum = pages.size + 1
+        return pages + DashboardPageConfig(
+            id = newId,
+            title = "Page $nextNum",
+            widgets = emptyList()
+        )
+    }
+
+    fun deletePage(pages: List<DashboardPageConfig>, pageIndex: Int): List<DashboardPageConfig> {
+        if (pages.size <= 1 || pageIndex !in pages.indices) return pages
+        return pages.filterIndexed { index, _ -> index != pageIndex }
+    }
+
+    fun addWidget(
+        pages: List<DashboardPageConfig>,
+        pageIndex: Int,
+        type: CarWidgetType,
+        widgetId: String = "w_${UUID.randomUUID().toString().take(8)}"
+    ): List<DashboardPageConfig> {
+        if (pageIndex !in pages.indices) return pages
+        return pages.mapIndexed { idx, page ->
+            if (idx != pageIndex) page
+            else page.copy(widgets = page.widgets + DashboardWidgetItem(id = widgetId, type = type))
+        }
+    }
+
+    fun removeWidget(
+        pages: List<DashboardPageConfig>,
+        pageIndex: Int,
+        widgetId: String
+    ): List<DashboardPageConfig> {
+        if (pageIndex !in pages.indices) return pages
+        return pages.mapIndexed { idx, page ->
+            if (idx != pageIndex) page
+            else page.copy(widgets = page.widgets.filterNot { it.id == widgetId })
+        }
+    }
+
+    fun moveWidget(
+        pages: List<DashboardPageConfig>,
+        pageIndex: Int,
+        widgetId: String,
+        delta: Int
+    ): List<DashboardPageConfig> {
+        if (pageIndex !in pages.indices) return pages
+        return pages.mapIndexed { idx, page ->
+            if (idx != pageIndex) page
+            else {
+                val list = page.widgets.toMutableList()
+                val curIdx = list.indexOfFirst { it.id == widgetId }
+                if (curIdx < 0) return@mapIndexed page
+                val targetIdx = (curIdx + delta).coerceIn(0, list.lastIndex)
+                if (curIdx == targetIdx) return@mapIndexed page
+                val item = list.removeAt(curIdx)
+                list.add(targetIdx, item)
+                page.copy(widgets = list)
+            }
+        }
+    }
+
+    fun swapWidgets(
+        pages: List<DashboardPageConfig>,
+        pageIndex: Int,
+        firstId: String,
+        secondId: String
+    ): List<DashboardPageConfig> {
+        if (pageIndex !in pages.indices || firstId == secondId) return pages
+        return pages.mapIndexed { idx, page ->
+            if (idx != pageIndex) page
+            else {
+                val list = page.widgets.toMutableList()
+                val i1 = list.indexOfFirst { it.id == firstId }
+                val i2 = list.indexOfFirst { it.id == secondId }
+                if (i1 < 0 || i2 < 0) return@mapIndexed page
+                val temp = list[i1]
+                list[i1] = list[i2]
+                list[i2] = temp
+                page.copy(widgets = list)
+            }
+        }
+    }
 }
 
 data class LauncherUiState(
@@ -48,7 +153,13 @@ data class LauncherUiState(
     val splitPreselectedPrimary: String? = null,
     val pendingValetAction: ValetAction? = null,
     val appBeingEdited: AppEntry? = null,
-    val toastMessage: String? = null
+    val dockSlotBeingCustomized: Int? = null,
+    val isWidgetEditMode: Boolean = false,
+    val addWidgetPageIndex: Int? = null,
+    val quickContactBeingEdited: QuickContact? = null,
+    val bannerNotice: BannerNotice? = null,
+    val isHighwayFocusActive: Boolean = false,
+    val isBreakReminderDue: Boolean = false
 )
 
 class LauncherViewModel(application: Application) : AndroidViewModel(application) {
@@ -65,7 +176,14 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     private val _splitPreselectedPrimary = MutableStateFlow<String?>(null)
     private val _pendingValetAction = MutableStateFlow<ValetAction?>(null)
     private val _appBeingEdited = MutableStateFlow<AppEntry?>(null)
-    private val _toastMessage = MutableStateFlow<String?>(null)
+    private val _dockSlotBeingCustomized = MutableStateFlow<Int?>(null)
+    private val _isWidgetEditMode = MutableStateFlow(false)
+    private val _addWidgetPageIndex = MutableStateFlow<Int?>(null)
+    private val _quickContactBeingEdited = MutableStateFlow<QuickContact?>(null)
+    private val _bannerNotice = MutableStateFlow<BannerNotice?>(null)
+    private val _manualHighwayFocus = MutableStateFlow<Boolean?>(null)
+    private val _breakDismissedUntilMs = MutableStateFlow(0L)
+    private var lastAutoFocusState = false
 
     private val _processedIcons = MutableStateFlow<Map<String, ImageBitmap>>(emptyMap())
     val processedIcons: StateFlow<Map<String, ImageBitmap>> = _processedIcons.asStateFlow()
@@ -90,13 +208,46 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         ModalStates(dimmer, splitDialog, splitPrimary, valetAction, editingApp)
     }
 
+    private val editModalStateFlow = combine(
+        _dockSlotBeingCustomized,
+        _isWidgetEditMode,
+        _addWidgetPageIndex,
+        _quickContactBeingEdited
+    ) { dockSlot, widgetEdit, addPageIdx, contact ->
+        EditModalStates(dockSlot, widgetEdit, addPageIdx, contact)
+    }
+
+    private val assistStateFlow = combine(
+        preferences,
+        telemetryState,
+        _manualHighwayFocus,
+        _breakDismissedUntilMs
+    ) { prefs, tel, manualFocus, dismissedUntil ->
+        val focus = DriverAssistUtils.shouldHighwayFocusBeActive(
+            manualOverride = manualFocus,
+            autoEnabled = prefs.highwayFocusAutoEnabled,
+            speedKmh = tel.speedKmh,
+            currentlyActive = lastAutoFocusState
+        )
+        lastAutoFocusState = focus
+        val breakDue = DriverAssistUtils.shouldTriggerBreakReminder(
+            tripStartTimeMs = tel.tripStartTimeMs,
+            nowMs = System.currentTimeMillis(),
+            thresholdMinutes = prefs.breakReminderMinutes,
+            dismissedUntilMs = dismissedUntil
+        )
+        AssistStates(focus, breakDue)
+    }
+
     val uiState: StateFlow<LauncherUiState> = combine(
         preferences,
         _allApps,
         _iconPacks,
         _currentScreen,
         modalStateFlow,
-        _toastMessage
+        editModalStateFlow,
+        _bannerNotice,
+        assistStateFlow
     ) { arr ->
         val prefs = arr[0] as LauncherPreferences
         @Suppress("UNCHECKED_CAST")
@@ -105,12 +256,13 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         val packs = arr[2] as List<IconPackInfo>
         val screen = arr[3] as LauncherScreen
         val modal = arr[4] as ModalStates
-        val toast = arr[5] as String?
+        val editModal = arr[5] as EditModalStates
+        val banner = arr[6] as BannerNotice?
+        val assist = arr[7] as AssistStates
 
         val visible = apps.filter { !it.isHidden }
         val appMap = apps.associateBy { it.packageName }
 
-        // Compute 3 dynamic dock slots: pinned overrides recent; remaining filled by recent then popular visible apps
         val used = mutableSetOf<String>()
         val resolvedSlots = MutableList<AppEntry?>(3) { idx ->
             val pinnedPkg = prefs.pinnedDockPackages.getOrNull(idx)
@@ -145,7 +297,13 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             splitPreselectedPrimary = modal.splitPrimary,
             pendingValetAction = modal.valetAction,
             appBeingEdited = modal.editingApp,
-            toastMessage = toast
+            dockSlotBeingCustomized = editModal.dockSlot,
+            isWidgetEditMode = editModal.widgetEdit,
+            addWidgetPageIndex = editModal.addPageIdx,
+            quickContactBeingEdited = editModal.contact,
+            bannerNotice = banner,
+            isHighwayFocusActive = assist.highwayFocusActive,
+            isBreakReminderDue = assist.breakReminderDue
         )
     }.stateIn(
         scope = viewModelScope,
@@ -161,14 +319,21 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             _iconPacks.value = iconProcessor.discoverIconPacks()
         }
 
-        // Reload installed apps whenever preferences change (hidden/labels/order/iconPack)
         viewModelScope.launch {
-            preferences.collect { prefs ->
-                refreshAppsList(prefs)
-            }
+            preferences
+                .distinctUntilChangedBy { prefs ->
+                    AppReloadKey(
+                        hiddenPackages = prefs.hiddenPackages,
+                        customLabels = prefs.customLabels,
+                        appOrder = prefs.appOrder,
+                        iconPack = prefs.activeIconPackPackage
+                    )
+                }
+                .collect { prefs ->
+                    refreshAppsList(prefs)
+                }
         }
 
-        // Watch for package install / uninstall / update events
         viewModelScope.launch {
             iconProcessor.observePackageChanges().collect {
                 _iconPacks.value = iconProcessor.discoverIconPacks()
@@ -176,7 +341,6 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             }
         }
 
-        // Trigger speed guard alert chime when speeding
         viewModelScope.launch {
             combine(telemetryState, preferences) { tel, prefs ->
                 Triple(prefs.speedGuardEnabled, tel.speedKmh, prefs.speedLimitKmh)
@@ -194,14 +358,16 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         )
         _allApps.value = loaded
 
-        val iconMap = mutableMapOf<String, ImageBitmap>()
-        for (app in loaded) {
-            val bmp = iconProcessor.getProcessedIcon(
-                app = app,
-                iconPackPackage = prefs.activeIconPackPackage,
-                sizePx = 192
-            )
-            iconMap[app.packageName] = bmp
+        val iconMap = coroutineScope {
+            loaded.map { app ->
+                async(Dispatchers.Default) {
+                    app.packageName to iconProcessor.getProcessedIcon(
+                        app = app,
+                        iconPackPackage = prefs.activeIconPackPackage,
+                        sizePx = 192
+                    )
+                }
+            }.awaitAll().toMap()
         }
         _processedIcons.value = iconMap
     }
@@ -211,7 +377,12 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         CarMediaNotificationListenerService.refreshPermissionStatus(getApplication())
     }
 
+    fun refreshWeather() {
+        telemetryManager.refreshWeatherNow()
+    }
+
     fun toggleDashboardAndGrid() {
+        _isWidgetEditMode.value = false
         _currentScreen.value = when (_currentScreen.value) {
             LauncherScreen.DASHBOARD -> LauncherScreen.APP_GRID
             LauncherScreen.APP_GRID -> LauncherScreen.DASHBOARD
@@ -220,6 +391,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun navigateTo(screen: LauncherScreen) {
+        _isWidgetEditMode.value = false
         if (screen == LauncherScreen.SETTINGS && preferences.value.valetModeEnabled) {
             _pendingValetAction.value = ValetAction.OpenSettings
         } else {
@@ -228,6 +400,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun navigateBackToDashboard() {
+        _isWidgetEditMode.value = false
         _currentScreen.value = LauncherScreen.DASHBOARD
     }
 
@@ -243,6 +416,95 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         _appBeingEdited.value = null
     }
 
+    fun requestCustomizeDockSlot(slotIndex: Int) {
+        if (preferences.value.valetModeEnabled) {
+            _pendingValetAction.value = ValetAction.CustomizeDockSlot(slotIndex)
+        } else {
+            _dockSlotBeingCustomized.value = slotIndex.coerceIn(0, 2)
+        }
+    }
+
+    fun dismissDockSlotCustomization() {
+        _dockSlotBeingCustomized.value = null
+    }
+
+    fun toggleWidgetEditMode() {
+        if (!_isWidgetEditMode.value && preferences.value.valetModeEnabled) {
+            _pendingValetAction.value = ValetAction.ToggleWidgetEdit
+        } else {
+            _isWidgetEditMode.value = !_isWidgetEditMode.value
+        }
+    }
+
+    fun setWidgetEditMode(enabled: Boolean) {
+        _isWidgetEditMode.value = enabled
+    }
+
+    fun openAddWidgetSheet(pageIndex: Int) {
+        _addWidgetPageIndex.value = pageIndex
+    }
+
+    fun dismissAddWidgetSheet() {
+        _addWidgetPageIndex.value = null
+    }
+
+    fun addDashboardPage() {
+        updatePref { prefs ->
+            prefs.copy(dashboardPages = DashboardPageMutator.addPage(prefs.dashboardPages))
+        }
+    }
+
+    fun deleteDashboardPage(pageIndex: Int) {
+        updatePref { prefs ->
+            prefs.copy(dashboardPages = DashboardPageMutator.deletePage(prefs.dashboardPages, pageIndex))
+        }
+    }
+
+    fun addWidgetToPage(pageIndex: Int, type: CarWidgetType) {
+        updatePref { prefs ->
+            prefs.copy(dashboardPages = DashboardPageMutator.addWidget(prefs.dashboardPages, pageIndex, type))
+        }
+        _addWidgetPageIndex.value = null
+    }
+
+    fun removeWidgetFromPage(pageIndex: Int, widgetId: String) {
+        updatePref { prefs ->
+            prefs.copy(dashboardPages = DashboardPageMutator.removeWidget(prefs.dashboardPages, pageIndex, widgetId))
+        }
+    }
+
+    fun moveWidgetInPage(pageIndex: Int, widgetId: String, delta: Int) {
+        updatePref { prefs ->
+            prefs.copy(dashboardPages = DashboardPageMutator.moveWidget(prefs.dashboardPages, pageIndex, widgetId, delta))
+        }
+    }
+
+    fun swapWidgetsInPage(pageIndex: Int, firstId: String, secondId: String) {
+        updatePref { prefs ->
+            prefs.copy(dashboardPages = DashboardPageMutator.swapWidgets(prefs.dashboardPages, pageIndex, firstId, secondId))
+        }
+    }
+
+    fun resetDashboardPagesToDefault() {
+        updatePref { prefs -> prefs.copy(dashboardPages = defaultDashboardPages()) }
+    }
+
+    fun requestEditQuickContact(contact: QuickContact) {
+        _quickContactBeingEdited.value = contact
+    }
+
+    fun dismissEditQuickContact() {
+        _quickContactBeingEdited.value = null
+    }
+
+    fun saveQuickContact(updated: QuickContact) {
+        _quickContactBeingEdited.value = null
+        updatePref { prefs ->
+            val list = prefs.quickContacts.map { if (it.id == updated.id) updated else it }
+            prefs.copy(quickContacts = list)
+        }
+    }
+
     fun verifyValetPin(enteredPin: String): Boolean {
         val valid = enteredPin == preferences.value.valetPin
         if (valid) {
@@ -251,6 +513,8 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             when (action) {
                 ValetAction.OpenSettings -> _currentScreen.value = LauncherScreen.SETTINGS
                 is ValetAction.EditApp -> _appBeingEdited.value = action.app
+                is ValetAction.CustomizeDockSlot -> _dockSlotBeingCustomized.value = action.slotIndex.coerceIn(0, 2)
+                ValetAction.ToggleWidgetEdit -> _isWidgetEditMode.value = true
                 null -> Unit
             }
         }
@@ -309,7 +573,6 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             repo.updatePreferences { prefs ->
                 val mutable = prefs.pinnedDockPackages.toMutableList()
                 while (mutable.size < 3) mutable.add(null)
-                // Remove package from other slots if already pinned
                 if (packageName != null) {
                     for (i in mutable.indices) {
                         if (mutable[i] == packageName) mutable[i] = null
@@ -399,12 +662,77 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         if (clean.length == 4) updatePref { it.copy(valetPin = clean) }
     }
 
+    fun updateNightWarmth(enabled: Boolean) = updatePref { it.copy(nightWarmthEnabled = enabled) }
+    fun updateHighwayFocusAuto(enabled: Boolean) = updatePref { it.copy(highwayFocusAutoEnabled = enabled) }
+    fun updateBreakReminderMinutes(minutes: Int) = updatePref { it.copy(breakReminderMinutes = minutes.coerceIn(30, 240)) }
+
+    fun toggleHighwayFocus(onMsg: String, offMsg: String) {
+        val next = !uiState.value.isHighwayFocusActive
+        _manualHighwayFocus.value = next
+        if (next) _isWidgetEditMode.value = false
+        showBanner(if (next) onMsg else offMsg)
+    }
+
+    fun dismissBreakReminder() {
+        _breakDismissedUntilMs.value = System.currentTimeMillis() + 20 * 60_000L
+    }
+
+    fun resetTripTimer(resetMsg: String) {
+        telemetryManager.resetTripTimer()
+        _breakDismissedUntilMs.value = 0L
+        showBanner(resetMsg)
+    }
+
+    fun saveOrNavigateParkedSpot(savedMsg: String, noGpsMsg: String) {
+        val prefs = preferences.value
+        val tel = telemetryState.value
+        if (prefs.parkedLatitude != null && prefs.parkedLongitude != null) {
+            AppLauncherHelper.launchCoordinatesNavigation(
+                context = getApplication(),
+                latitude = prefs.parkedLatitude,
+                longitude = prefs.parkedLongitude,
+                provider = prefs.navProvider
+            )
+        } else if (tel.hasGpsFix) {
+            val now = System.currentTimeMillis()
+            updatePref {
+                it.copy(
+                    parkedLatitude = tel.latitude,
+                    parkedLongitude = tel.longitude,
+                    parkedTimestampMs = now
+                )
+            }
+            showBanner(savedMsg)
+        } else {
+            showBanner(noGpsMsg, isWarning = true)
+        }
+    }
+
+    fun clearParkedSpot(clearedMsg: String) {
+        updatePref {
+            it.copy(
+                parkedLatitude = null,
+                parkedLongitude = null,
+                parkedTimestampMs = null
+            )
+        }
+        showBanner(clearedMsg)
+    }
+
     fun completeOnboarding() = updatePref { it.copy(onboardingCompleted = true) }
+
+    fun showBanner(message: String, isWarning: Boolean = false) {
+        _bannerNotice.value = BannerNotice(message = message, isWarning = isWarning)
+    }
+
+    fun consumeBanner() {
+        _bannerNotice.value = null
+    }
 
     fun exportBackup(uri: Uri, successMsg: String, failMsg: String) {
         viewModelScope.launch {
             val ok = repo.exportToUri(uri)
-            _toastMessage.value = if (ok) successMsg else failMsg
+            showBanner(if (ok) successMsg else failMsg, isWarning = !ok)
         }
     }
 
@@ -412,12 +740,8 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             val ok = repo.importFromUri(uri)
             if (ok) iconProcessor.clearCache()
-            _toastMessage.value = if (ok) successMsg else failMsg
+            showBanner(if (ok) successMsg else failMsg, isWarning = !ok)
         }
-    }
-
-    fun consumeToast() {
-        _toastMessage.value = null
     }
 
     private fun updatePref(block: (LauncherPreferences) -> LauncherPreferences) {
@@ -429,11 +753,30 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         telemetryManager.stop()
     }
 
+    private data class AppReloadKey(
+        val hiddenPackages: Set<String>,
+        val customLabels: Map<String, String>,
+        val appOrder: List<String>,
+        val iconPack: String?
+    )
+
     private data class ModalStates(
         val dimmer: Boolean,
         val splitDialog: Boolean,
         val splitPrimary: String?,
         val valetAction: ValetAction?,
         val editingApp: AppEntry?
+    )
+
+    private data class EditModalStates(
+        val dockSlot: Int?,
+        val widgetEdit: Boolean,
+        val addPageIdx: Int?,
+        val contact: QuickContact?
+    )
+
+    private data class AssistStates(
+        val highwayFocusActive: Boolean,
+        val breakReminderDue: Boolean
     )
 }

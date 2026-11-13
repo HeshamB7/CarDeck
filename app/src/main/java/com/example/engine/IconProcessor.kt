@@ -37,6 +37,7 @@ import org.xmlpull.v1.XmlPullParserFactory
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
@@ -48,16 +49,19 @@ import kotlin.math.sin
  * Apple CarPlay iOS 18+ Icon Engine:
  * - Renders exact Apple CarPlay native icons for core apps:
  *   Phone, Music, Maps, Messages, Now Playing, Podcasts, Audiobooks, Calendar, Settings
- * - Maps installed Android system apps seamlessly and clips all third-party Android apps
- *   inside Apple's continuous Superellipse (Squircle) with soft gradient synthesis,
- *   subtle inner shadow, and glossy top rim.
+ * - Strips weird transparent borders/margins from any installed third-party Android app icon,
+ *   normalizes size uniformly, synthesizes clean opaque gradient backgrounds where needed,
+ *   and clips every icon inside Apple's 22.5% continuous Superellipse (Squircle).
  * - Supports external Icon Packs via appfilter.xml.
  */
 class IconProcessor(private val context: Context) {
 
     private val pm: PackageManager = context.packageManager
     private val iconCache = LruCache<String, ImageBitmap>(200)
-    private val iconPackMapCache = mutableMapOf<String, Map<String, String>>()
+    private val iconPackMapCache = ConcurrentHashMap<String, Map<String, String>>()
+    private val squirclePathCache = ConcurrentHashMap<Int, Path>()
+    private val glossOverlayCache = ConcurrentHashMap<Int, Bitmap>()
+    private val dayKeyFormat = ThreadLocal.withInitial { SimpleDateFormat("yyyyMMdd", Locale.US) }
 
     fun clearCache() {
         iconCache.evictAll()
@@ -101,7 +105,7 @@ class IconProcessor(private val context: Context) {
         val ownPackage = context.packageName
         val orderLookup = savedOrder.withIndex().associate { it.value to it.index }
 
-        // Exact Apple CarPlay iOS 18 Core Home Screen Apps (Page 1 + Settings)
+        // Exact Apple CarPlay iOS 18 Core Home Screen Apps (5x2 Page 1 order matching reference)
         val appleCoreEntries = listOf(
             AppEntry(
                 packageName = AppLauncherHelper.VIRTUAL_PHONE,
@@ -247,7 +251,7 @@ class IconProcessor(private val context: Context) {
         val dayKey = if (app.packageName == AppLauncherHelper.VIRTUAL_CALENDAR ||
             app.packageName.contains("calendar", ignoreCase = true)
         ) {
-            SimpleDateFormat("yyyyMMdd", Locale.US).format(Date())
+            dayKeyFormat.get()?.format(Date()).orEmpty()
         } else ""
 
         val cacheKey = "${app.packageName}|${iconPackPackage ?: "apple_carplay"}|$sizePx|$dayKey"
@@ -319,27 +323,27 @@ class IconProcessor(private val context: Context) {
 
         when (kind) {
             AppleCoreKind.PHONE -> {
-                drawVerticalGradient(c, s, Color.rgb(103, 237, 117), Color.rgb(30, 201, 59))
+                drawVerticalGradient(c, s, Color.rgb(103, 237, 117), Color.rgb(26, 201, 54))
                 drawAppleHandset(c, s)
             }
             AppleCoreKind.MESSAGES -> {
-                drawVerticalGradient(c, s, Color.rgb(103, 237, 117), Color.rgb(30, 201, 59))
+                drawVerticalGradient(c, s, Color.rgb(103, 237, 117), Color.rgb(26, 201, 54))
                 drawAppleSpeechBubble(c, s)
             }
             AppleCoreKind.MUSIC -> {
-                drawVerticalGradient(c, s, Color.rgb(252, 92, 118), Color.rgb(250, 35, 59))
+                drawVerticalGradient(c, s, Color.rgb(250, 92, 114), Color.rgb(250, 35, 59))
                 drawAppleMusicNotes(c, s)
             }
             AppleCoreKind.NOW_PLAYING -> {
-                drawVerticalGradient(c, s, Color.rgb(251, 90, 108), Color.rgb(208, 28, 66))
+                c.drawColor(Color.WHITE)
                 drawAppleNowPlayingGlyph(c, s)
             }
             AppleCoreKind.PODCASTS -> {
-                drawVerticalGradient(c, s, Color.rgb(196, 101, 250), Color.rgb(123, 34, 226))
+                drawVerticalGradient(c, s, Color.rgb(200, 101, 250), Color.rgb(123, 34, 226))
                 drawApplePodcastsGlyph(c, s)
             }
             AppleCoreKind.AUDIOBOOKS -> {
-                drawVerticalGradient(c, s, Color.rgb(255, 180, 63), Color.rgb(255, 110, 0))
+                drawVerticalGradient(c, s, Color.rgb(255, 182, 56), Color.rgb(255, 106, 0))
                 drawAppleAudiobooksGlyph(c, s)
             }
             AppleCoreKind.MAPS -> {
@@ -368,7 +372,6 @@ class IconProcessor(private val context: Context) {
         c.translate(s * 0.50f, s * 0.50f)
         c.rotate(-42f)
         val p = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
-        // Classic Apple Phone handset silhouette built with rounded caps and curved bridge
         val path = Path().apply {
             moveTo(-s * 0.25f, -s * 0.08f)
             cubicTo(-s * 0.27f, -s * 0.20f, -s * 0.14f, -s * 0.22f, -s * 0.10f, -s * 0.14f)
@@ -399,7 +402,6 @@ class IconProcessor(private val context: Context) {
 
     private fun drawAppleMusicNotes(c: Canvas, s: Float) {
         val p = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
-        // Left & right note heads
         c.save()
         c.rotate(-16f, s * 0.32f, s * 0.68f)
         c.drawOval(RectF(s * 0.22f, s * 0.61f, s * 0.40f, s * 0.75f), p)
@@ -410,7 +412,6 @@ class IconProcessor(private val context: Context) {
         c.drawOval(RectF(s * 0.55f, s * 0.55f, s * 0.73f, s * 0.69f), p)
         c.restore()
 
-        // Stems + slanted top beam
         val stemsAndBeam = Path().apply {
             moveTo(s * 0.35f, s * 0.66f)
             lineTo(s * 0.35f, s * 0.28f)
@@ -426,20 +427,23 @@ class IconProcessor(private val context: Context) {
     }
 
     private fun drawAppleNowPlayingGlyph(c: Canvas, s: Float) {
-        val ringPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.argb(68, 255, 255, 255)
-            style = Paint.Style.STROKE
-            strokeWidth = s * 0.045f
+        val barPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            shader = LinearGradient(
+                0f, s * 0.2f, 0f, s * 0.8f,
+                Color.rgb(255, 55, 95),
+                Color.rgb(250, 35, 59),
+                Shader.TileMode.CLAMP
+            )
         }
-        c.drawCircle(s * 0.5f, s * 0.5f, s * 0.31f, ringPaint)
-        val p = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
-        val play = Path().apply {
-            moveTo(s * 0.41f, s * 0.33f)
-            lineTo(s * 0.68f, s * 0.50f)
-            lineTo(s * 0.41f, s * 0.67f)
-            close()
+        val barWidth = s * 0.085f
+        val heights = listOf(0.24f, 0.42f, 0.60f, 0.38f, 0.22f)
+        val xCenters = listOf(0.24f, 0.37f, 0.50f, 0.63f, 0.76f)
+        heights.forEachIndexed { idx, hFrac ->
+            val bh = s * hFrac
+            val cx = s * xCenters[idx]
+            val rect = RectF(cx - barWidth / 2f, (s - bh) / 2f, cx + barWidth / 2f, (s + bh) / 2f)
+            c.drawRoundRect(rect, barWidth / 2f, barWidth / 2f, barPaint)
         }
-        c.drawPath(play, p)
     }
 
     private fun drawApplePodcastsGlyph(c: Canvas, s: Float) {
@@ -459,7 +463,6 @@ class IconProcessor(private val context: Context) {
 
     private fun drawAppleAudiobooksGlyph(c: Canvas, s: Float) {
         val p = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
-        // Left page
         val leftPage = Path().apply {
             moveTo(s * 0.485f, s * 0.31f)
             quadTo(s * 0.34f, s * 0.26f, s * 0.20f, s * 0.31f)
@@ -467,7 +470,6 @@ class IconProcessor(private val context: Context) {
             quadTo(s * 0.34f, s * 0.66f, s * 0.485f, s * 0.72f)
             close()
         }
-        // Right page
         val rightPage = Path().apply {
             moveTo(s * 0.515f, s * 0.31f)
             quadTo(s * 0.66f, s * 0.26f, s * 0.80f, s * 0.31f)
@@ -480,23 +482,18 @@ class IconProcessor(private val context: Context) {
     }
 
     private fun drawAppleMapsIcon(c: Canvas, s: Float) {
-        // Cream Apple Maps base
         c.drawColor(Color.rgb(244, 241, 232))
-
-        // Green park & mint block
-        val parkPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(112, 215, 110) }
-        c.drawRect(0f, 0f, s * 0.42f, s * 0.54f, parkPaint)
+        val parkPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(114, 215, 109) }
+        c.drawRect(0f, 0f, s * 0.44f, s * 0.52f, parkPaint)
         val pinkTint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(252, 206, 214) }
-        c.drawRect(s * 0.56f, s * 0.45f, s, s, pinkTint)
+        c.drawRect(s * 0.56f, s * 0.44f, s, s, pinkTint)
 
-        // Yellow cross avenue
         val yellowRoad = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.rgb(255, 204, 0)
             strokeWidth = s * 0.11f
         }
-        c.drawLine(0f, s * 0.54f, s, s * 0.40f, yellowRoad)
+        c.drawLine(0f, s * 0.52f, s, s * 0.39f, yellowRoad)
 
-        // White border + Blue Interstate Highway
         val roadCasing = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.WHITE
             strokeWidth = s * 0.22f
@@ -507,10 +504,9 @@ class IconProcessor(private val context: Context) {
             strokeWidth = s * 0.14f
             strokeCap = Paint.Cap.ROUND
         }
-        c.drawLine(s * 0.48f, s, s * 0.52f, 0f, roadCasing)
-        c.drawLine(s * 0.48f, s, s * 0.52f, 0f, roadBlue)
+        c.drawLine(s * 0.47f, s, s * 0.52f, 0f, roadCasing)
+        c.drawLine(s * 0.47f, s, s * 0.52f, 0f, roadBlue)
 
-        // Iconic Apple Maps blue circular navigation badge
         val badgeWhite = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
         val badgeBlue = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(0, 122, 255) }
         val cx = s * 0.48f
@@ -527,7 +523,6 @@ class IconProcessor(private val context: Context) {
         }
         c.drawPath(navArrow, badgeWhite)
 
-        // Classic Highway Shield pill (top-right)
         val shieldRed = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(255, 59, 48) }
         val shieldBlue = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(0, 122, 255) }
         c.drawRoundRect(RectF(s * 0.64f, s * 0.10f, s * 0.90f, s * 0.34f), s * 0.06f, s * 0.06f, badgeWhite)
@@ -537,67 +532,64 @@ class IconProcessor(private val context: Context) {
 
     private fun drawAppleCalendarIcon(c: Canvas, s: Float) {
         c.drawColor(Color.WHITE)
-        val redBand = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(255, 59, 48) }
-        c.drawRect(0f, 0f, s, s * 0.31f, redBand)
-
         val now = Date()
         val dayName = SimpleDateFormat("EEE", Locale.US).format(now).uppercase(Locale.US)
         val dayNum = SimpleDateFormat("d", Locale.US).format(now)
 
         val headerText = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.WHITE
+            color = Color.rgb(255, 59, 48)
             textAlign = Paint.Align.CENTER
             textSize = s * 0.17f
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
         }
-        c.drawText(dayName, s * 0.5f, s * 0.22f, headerText)
+        c.drawText(dayName, s * 0.5f, s * 0.27f, headerText)
 
         val numText = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.rgb(28, 28, 30)
             textAlign = Paint.Align.CENTER
-            textSize = s * 0.50f
+            textSize = s * 0.52f
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
         }
         val numBounds = Rect()
         numText.getTextBounds(dayNum, 0, dayNum.length, numBounds)
-        c.drawText(dayNum, s * 0.5f, s * 0.67f + numBounds.height() / 2f, numText)
+        c.drawText(dayNum, s * 0.5f, s * 0.64f + numBounds.height() / 2f, numText)
     }
 
     private fun drawAppleSettingsIcon(c: Canvas, s: Float) {
-        drawVerticalGradient(c, s, Color.rgb(162, 162, 168), Color.rgb(94, 94, 100))
+        drawVerticalGradient(c, s, Color.rgb(162, 164, 172), Color.rgb(96, 98, 106))
 
         val cx = s * 0.5f
         val cy = s * 0.5f
-        val darkGear = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(44, 44, 46) }
-        val lightMetal = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(212, 212, 216) }
+        val darkGear = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(43, 43, 46) }
+        val lightMetal = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(218, 220, 226) }
 
-        // Outer metallic ring
-        c.drawCircle(cx, cy, s * 0.38f, lightMetal)
-        c.drawCircle(cx, cy, s * 0.33f, darkGear)
+        c.drawCircle(cx, cy, s * 0.40f, lightMetal)
+        c.drawCircle(cx, cy, s * 0.34f, darkGear)
 
-        // Precision 12 gear teeth
-        val toothPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(225, 225, 230) }
-        for (i in 0 until 12) {
+        val toothPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(229, 230, 236) }
+        for (i in 0 until 24) {
             c.save()
-            c.rotate(i * 30f, cx, cy)
+            c.rotate(i * 15f, cx, cy)
             c.drawRoundRect(
-                RectF(cx - s * 0.045f, cy - s * 0.42f, cx + s * 0.045f, cy - s * 0.30f),
-                s * 0.02f, s * 0.02f, toothPaint
+                RectF(cx - s * 0.025f, cy - s * 0.43f, cx + s * 0.025f, cy - s * 0.33f),
+                s * 0.015f, s * 0.015f, toothPaint
             )
             c.restore()
         }
 
-        // Inner spokes + hub
         c.drawCircle(cx, cy, s * 0.25f, lightMetal)
-        c.drawCircle(cx, cy, s * 0.17f, darkGear)
+        c.drawCircle(cx, cy, s * 0.18f, darkGear)
         for (i in 0 until 3) {
             c.save()
             c.rotate(i * 120f, cx, cy)
-            c.drawRect(cx - s * 0.028f, cy - s * 0.25f, cx + s * 0.028f, cy + s * 0.25f, lightMetal)
+            c.drawRoundRect(
+                RectF(cx - s * 0.032f, cy - s * 0.26f, cx + s * 0.032f, cy),
+                s * 0.02f, s * 0.02f, lightMetal
+            )
             c.restore()
         }
-        c.drawCircle(cx, cy, s * 0.10f, lightMetal)
-        c.drawCircle(cx, cy, s * 0.055f, darkGear)
+        c.drawCircle(cx, cy, s * 0.11f, lightMetal)
+        c.drawCircle(cx, cy, s * 0.06f, darkGear)
     }
 
     private fun loadFromIconPack(iconPackPkg: String, app: AppEntry): Drawable? {
@@ -660,39 +652,118 @@ class IconProcessor(private val context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && drawable is AdaptiveIconDrawable) {
             val bg = drawable.background
             val fg = drawable.foreground
-            val pad = (sizePx * -0.18f).toInt()
-            val bounds = Rect(pad, pad, sizePx - pad, sizePx - pad)
+            // Full-bleed crop of adaptive background so zero transparent edge leaks remain
+            val bgPad = (sizePx * -0.22f).toInt()
+            val bgBounds = Rect(bgPad, bgPad, sizePx - bgPad, sizePx - bgPad)
             if (bg != null) {
-                bg.bounds = bounds
+                bg.bounds = bgBounds
                 bg.draw(contentCanvas)
+                // Verify background actually filled corners; if transparent, paint soft gradient first
+                if (measureCornerTransparencyRatio(contentBitmap) > 0.15f) {
+                    val tempFg = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
+                    val fgCanvas = Canvas(tempFg)
+                    fg?.let {
+                        it.bounds = bgBounds
+                        it.draw(fgCanvas)
+                    }
+                    val accent = sampleDominantColor(tempFg)
+                    contentCanvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
+                    drawSoftGradientBackdrop(contentCanvas, sizePx, accent)
+                    bg.draw(contentCanvas)
+                    tempFg.recycle()
+                }
             } else {
                 drawSoftGradientBackdrop(contentCanvas, sizePx, Color.rgb(34, 118, 255))
             }
             if (fg != null) {
-                fg.bounds = bounds
+                val fgPad = (sizePx * -0.17f).toInt()
+                fg.bounds = Rect(fgPad, fgPad, sizePx - fgPad, sizePx - fgPad)
                 fg.draw(contentCanvas)
             }
         } else {
             val rawBitmap = drawableToBitmap(drawable, sizePx)
-            val transparencyRatio = measureOuterTransparencyRatio(rawBitmap)
-            if (transparencyRatio > 0.14f) {
-                val accent = sampleDominantColor(rawBitmap)
+            val rw = rawBitmap.width
+            val rh = rawBitmap.height
+            val pixels = IntArray(rw * rh)
+            rawBitmap.getPixels(pixels, 0, rw, 0, 0, rw, rh)
+            val transparencyRatio = measureOuterTransparencyRatio(pixels, rw, rh)
+            if (transparencyRatio > 0.08f) {
+                // Trim weird transparent padding around legacy Android icons and center uniformly
+                val opaqueBounds = findOpaqueContentBounds(pixels, rw, rh)
+                val accent = sampleDominantColor(pixels, rw, rh)
                 drawSoftGradientBackdrop(contentCanvas, sizePx, accent)
-                val inset = (sizePx * 0.14f).toInt()
+                val inset = (sizePx * 0.16f).toInt()
                 val dstRect = Rect(inset, inset, sizePx - inset, sizePx - inset)
-                contentCanvas.drawBitmap(rawBitmap, null, dstRect, Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
+                contentCanvas.drawBitmap(
+                    rawBitmap,
+                    opaqueBounds,
+                    dstRect,
+                    Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+                )
             } else {
-                contentCanvas.drawBitmap(rawBitmap, 0f, 0f, Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
+                contentCanvas.drawBitmap(
+                    rawBitmap,
+                    0f,
+                    0f,
+                    Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+                )
             }
         }
 
         return clipAndGlossSquircle(contentBitmap, sizePx)
     }
 
+    private fun getCachedSquirclePath(sizePx: Int): Path {
+        return squirclePathCache.getOrPut(sizePx) {
+            createSuperellipsePath(sizePx.toFloat(), sizePx.toFloat(), exponent = 4.65f)
+        }
+    }
+
+    private fun getCachedGlossOverlay(sizePx: Int, squirclePath: Path): Bitmap {
+        return glossOverlayCache.getOrPut(sizePx) {
+            val overlay = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
+            val c = Canvas(overlay)
+
+            val innerShadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.STROKE
+                strokeWidth = (sizePx * 0.016f).coerceAtLeast(1.6f)
+                color = Color.argb(34, 0, 0, 0)
+            }
+            c.drawPath(squirclePath, innerShadowPaint)
+
+            val glossPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                shader = LinearGradient(
+                    0f, 0f, 0f, sizePx * 0.30f,
+                    intArrayOf(
+                        Color.argb(62, 255, 255, 255),
+                        Color.argb(14, 255, 255, 255),
+                        Color.argb(0, 255, 255, 255)
+                    ),
+                    floatArrayOf(0f, 0.35f, 1f),
+                    Shader.TileMode.CLAMP
+                )
+            }
+            c.drawPath(squirclePath, glossPaint)
+
+            val rimHighlightPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.STROKE
+                strokeWidth = (sizePx * 0.015f).coerceAtLeast(1.5f)
+                shader = LinearGradient(
+                    0f, 0f, 0f, sizePx * 0.42f,
+                    Color.argb(128, 255, 255, 255),
+                    Color.argb(0, 255, 255, 255),
+                    Shader.TileMode.CLAMP
+                )
+            }
+            c.drawPath(squirclePath, rimHighlightPaint)
+            overlay
+        }
+    }
+
     private fun clipAndGlossSquircle(contentBitmap: Bitmap, sizePx: Int): Bitmap {
         val output = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(output)
-        val squirclePath = createSuperellipsePath(sizePx.toFloat(), sizePx.toFloat(), exponent = 5.0f)
+        val squirclePath = getCachedSquirclePath(sizePx)
 
         val maskPaint = Paint(Paint.ANTI_ALIAS_FLAG)
         canvas.drawPath(squirclePath, maskPaint)
@@ -700,51 +771,17 @@ class IconProcessor(private val context: Context) {
         canvas.drawBitmap(contentBitmap, 0f, 0f, maskPaint)
         maskPaint.xfermode = null
 
-        val innerShadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.STROKE
-            strokeWidth = (sizePx * 0.016f).coerceAtLeast(1.8f)
-            color = Color.argb(38, 0, 0, 0)
-        }
-        canvas.drawPath(squirclePath, innerShadowPaint)
-
-        val glossLayer = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
-        val glossCanvas = Canvas(glossLayer)
-        val glossPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            shader = LinearGradient(
-                0f, 0f, 0f, sizePx * 0.30f,
-                intArrayOf(
-                    Color.argb(68, 255, 255, 255),
-                    Color.argb(18, 255, 255, 255),
-                    Color.argb(0, 255, 255, 255)
-                ),
-                floatArrayOf(0f, 0.35f, 1f),
-                Shader.TileMode.CLAMP
-            )
-        }
-        glossCanvas.drawPath(squirclePath, glossPaint)
-
-        val rimHighlightPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.STROKE
-            strokeWidth = (sizePx * 0.015f).coerceAtLeast(1.6f)
-            shader = LinearGradient(
-                0f, 0f, 0f, sizePx * 0.42f,
-                Color.argb(135, 255, 255, 255),
-                Color.argb(0, 255, 255, 255),
-                Shader.TileMode.CLAMP
-            )
-        }
-        glossCanvas.drawPath(squirclePath, rimHighlightPaint)
-        canvas.drawBitmap(glossLayer, 0f, 0f, null)
+        val cachedOverlay = getCachedGlossOverlay(sizePx, squirclePath)
+        canvas.drawBitmap(cachedOverlay, 0f, 0f, null)
 
         contentBitmap.recycle()
-        glossLayer.recycle()
         return output
     }
 
     private fun createSuperellipsePath(width: Float, height: Float, exponent: Float): Path {
         val path = Path()
-        val rx = width / 2f - 1f
-        val ry = height / 2f - 1f
+        val rx = width / 2f - 0.5f
+        val ry = height / 2f - 0.5f
         val cx = width / 2f
         val cy = height / 2f
         val exp = 2.0 / exponent.toDouble()
@@ -775,19 +812,71 @@ class IconProcessor(private val context: Context) {
         return bitmap
     }
 
-    private fun measureOuterTransparencyRatio(bitmap: Bitmap): Float {
+    private fun findOpaqueContentBounds(pixels: IntArray, w: Int, h: Int): Rect {
+        var minX = w
+        var minY = h
+        var maxX = -1
+        var maxY = -1
+        val step = (w / 48).coerceAtLeast(1)
+        var y = 0
+        while (y < h) {
+            val rowOffset = y * w
+            var x = 0
+            while (x < w) {
+                if (Color.alpha(pixels[rowOffset + x]) > 36) {
+                    if (x < minX) minX = x
+                    if (y < minY) minY = y
+                    if (x > maxX) maxX = x
+                    if (y > maxY) maxY = y
+                }
+                x += step
+            }
+            y += step
+        }
+        if (maxX <= minX || maxY <= minY) return Rect(0, 0, w, h)
+        // Make bounding rect square so icon proportions stay undistorted
+        val bw = maxX - minX
+        val bh = maxY - minY
+        val side = maxOf(bw, bh)
+        val cx = (minX + maxX) / 2
+        val cy = (minY + maxY) / 2
+        val half = side / 2
+        return Rect(
+            (cx - half).coerceAtLeast(0),
+            (cy - half).coerceAtLeast(0),
+            (cx + half).coerceAtMost(w),
+            (cy + half).coerceAtMost(h)
+        )
+    }
+
+    private fun measureCornerTransparencyRatio(bitmap: Bitmap): Float {
         val w = bitmap.width
         val h = bitmap.height
+        val points = listOf(
+            2 to 2, w - 3 to 2, 2 to h - 3, w - 3 to h - 3,
+            w / 6 to 2, (w * 5) / 6 to 2, w / 6 to h - 3, (w * 5) / 6 to h - 3
+        )
+        val transparent = points.count { (x, y) ->
+            Color.alpha(bitmap.getPixel(x.coerceIn(0, w - 1), y.coerceIn(0, h - 1))) < 200
+        }
+        return transparent.toFloat() / points.size.toFloat()
+    }
+
+    private fun measureOuterTransparencyRatio(pixels: IntArray, w: Int, h: Int): Float {
         var transparentCount = 0
         var totalSamples = 0
         val stepX = (w / 14).coerceAtLeast(1)
         val stepY = (h / 14).coerceAtLeast(1)
-        for (y in 0 until h step stepY) {
-            for (x in 0 until w step stepX) {
+        var y = 0
+        while (y < h) {
+            val rowOffset = y * w
+            var x = 0
+            while (x < w) {
                 totalSamples++
-                val alpha = Color.alpha(bitmap.getPixel(x, y))
-                if (alpha < 40) transparentCount++
+                if (Color.alpha(pixels[rowOffset + x]) < 40) transparentCount++
+                x += stepX
             }
+            y += stepY
         }
         return if (totalSamples == 0) 0f else transparentCount.toFloat() / totalSamples.toFloat()
     }
@@ -795,15 +884,24 @@ class IconProcessor(private val context: Context) {
     private fun sampleDominantColor(bitmap: Bitmap): Int {
         val w = bitmap.width
         val h = bitmap.height
+        val pixels = IntArray(w * h)
+        bitmap.getPixels(pixels, 0, w, 0, 0, w, h)
+        return sampleDominantColor(pixels, w, h)
+    }
+
+    private fun sampleDominantColor(pixels: IntArray, w: Int, h: Int): Int {
         var rSum = 0L
         var gSum = 0L
         var bSum = 0L
         var count = 0L
         val stepX = (w / 12).coerceAtLeast(1)
         val stepY = (h / 12).coerceAtLeast(1)
-        for (y in 0 until h step stepY) {
-            for (x in 0 until w step stepX) {
-                val pixel = bitmap.getPixel(x, y)
+        var y = 0
+        while (y < h) {
+            val rowOffset = y * w
+            var x = 0
+            while (x < w) {
+                val pixel = pixels[rowOffset + x]
                 if (Color.alpha(pixel) > 120) {
                     val r = Color.red(pixel)
                     val g = Color.green(pixel)
@@ -816,7 +914,9 @@ class IconProcessor(private val context: Context) {
                         count++
                     }
                 }
+                x += stepX
             }
+            y += stepY
         }
         return if (count > 0) {
             Color.rgb((rSum / count).toInt(), (gSum / count).toInt(), (bSum / count).toInt())

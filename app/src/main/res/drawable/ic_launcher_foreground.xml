@@ -1,8 +1,46 @@
 <?xml version="1.0" encoding="utf-8"?>
-<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item
-        android:width="66dp"
-        android:height="66dp"
-        android:drawable="@drawable/img_car_launcher_icon"
-        android:gravity="center" />
-</layer-list>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Sleek Apple CarPlay Squircle Glass Frame -->
+    <path
+        android:fillColor="#24FFFFFF"
+        android:pathData="M36,24 L72,24 C81,24 84,27 84,36 L84,72 C84,81 81,84 72,84 L36,84 C27,84 24,81 24,72 L24,36 C24,27 27,24 36,24 Z"
+        android:strokeWidth="1.6"
+        android:strokeColor="#66FFFFFF" />
+
+    <!-- Left Dock Capsule Motif -->
+    <path
+        android:fillColor="#CCFFFFFF"
+        android:pathData="M31.5,31 L34.5,31 C36,31 37,32 37,33.5 L37,74.5 C37,76 36,77 34.5,77 L31.5,77 C30,77 29,76 29,74.5 L29,33.5 C29,32 30,31 31.5,31 Z" />
+
+    <!-- Apple Blue Navigation Chevron Emblem -->
+    <path
+        android:pathData="M59,36 L74,69 L59,62 L44,69 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:endX="59"
+                android:endY="70"
+                android:startX="59"
+                android:startY="36"
+                android:type="linear">
+                <item
+                    android:color="#FF47A3FF"
+                    android:offset="0" />
+                <item
+                    android:color="#FF007AFF"
+                    android:offset="1" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Subtle White Specular Edge on Chevron -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M59,36 L74,69 L59,62 L44,69 Z"
+        android:strokeWidth="1.2"
+        android:strokeColor="#99FFFFFF" />
+</vector>

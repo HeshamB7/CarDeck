@@ -1,0 +1,249 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">CarDeck</string>
+    <string name="media_listener_service_name">جسر وسائط CarDeck</string>
+
+    <!-- Onboarding & Permissions -->
+    <string name="onboarding_title">مرحباً بك في وضع CarPlay</string>
+    <string name="onboarding_subtitle">قم بتجهيز عداد السرعة الحي، والتحكم الشامل بالوسائط، وتعيين الشاشة الرئيسية.</string>
+    <string name="onboarding_location_title">الموقع والسرعة الحية (GPS)</string>
+    <string name="onboarding_location_desc">لتشغيل عداد السرعة الحي، وتنبيه حد السرعة، واتجاه الخريطة</string>
+    <string name="onboarding_media_title">مزامنة قيد التشغيل</string>
+    <string name="onboarding_media_desc">يعرض معلومات المسار والغلاف مباشرة من Spotify أو الموسيقى أو البودكاست</string>
+    <string name="onboarding_home_title">تعيين كمشغل رئيسي افتراضي</string>
+    <string name="onboarding_home_desc">تشغيل CarDeck تلقائياً عند تشغيل شاشة السيارة</string>
+    <string name="action_grant">سماح</string>
+    <string name="action_granted">مفعّل</string>
+    <string name="action_set_default">إعداد</string>
+    <string name="action_start_driving">متابعة</string>
+
+    <!-- Dock & Navigation -->
+    <string name="cd_dock_switch_view">التبديل بين شاشة الويدجت والتطبيقات</string>
+    <string name="cd_dock_settings">الإعدادات</string>
+    <string name="cd_dock_voice">المساعد الصوتي</string>
+    <string name="cd_dock_oled_dimmer">وضع التعتيم الليلي OLED</string>
+    <string name="cd_dock_split_app">تطبيقات تقسيم الشاشة</string>
+    <string name="cd_status_wifi">حالة Wi-Fi</string>
+    <string name="cd_status_cellular">إشارة الشبكة</string>
+    <string name="cd_status_bluetooth">حالة البلوتوث</string>
+    <string name="cd_status_gps">حالة GPS</string>
+
+    <!-- Dashboard & Navigation Card -->
+    <string name="nav_search_placeholder">البحث في الخرائط…</string>
+    <string name="nav_go">انطلق</string>
+    <string name="nav_home">المنزل</string>
+    <string name="nav_work">العمل</string>
+    <string name="nav_gas">محطات وقود</string>
+    <string name="nav_open_maps">فتح الخرائط</string>
+    <string name="nav_gps_active">GPS جاهز</string>
+    <string name="nav_gps_searching">جاري التقاط GPS…</string>
+
+    <!-- Media Controller -->
+    <string name="media_no_active">لا يوجد تشغيل</string>
+    <string name="media_tap_to_play">شغّل Spotify أو Apple Music أو YouTube Music</string>
+    <string name="media_permission_needed">فعّل صلاحية الإشعارات لعرض الوسائط الحالية</string>
+    <string name="media_enable_access">تفعيل الوصول</string>
+    <string name="cd_media_prev">السابق</string>
+    <string name="cd_media_play_pause">تشغيل أو إيقاف مؤقت</string>
+    <string name="cd_media_next">التالي</string>
+
+    <!-- Smart Stack -->
+    <string name="stack_speed_title">عداد السرعة</string>
+    <string name="stack_speed_limit_alert">تجاوز الحد (%1$d %2$s)</string>
+    <string name="stack_speed_safe">حد السرعة %1$d %2$s</string>
+    <string name="stack_unit_kmh">كم/س</string>
+    <string name="stack_unit_mph">ميل/س</string>
+    <string name="stack_calendar_title">التقويم</string>
+    <string name="stack_trip_elapsed">مدة القيادة</string>
+    <string name="stack_no_events">لا توجد مواعيد قادمة</string>
+    <string name="stack_connect_calendar">ربط</string>
+    <string name="stack_controls_title">أدوات السيارة</string>
+    <string name="control_bluetooth">بلوتوث</string>
+    <string name="control_wifi">Wi-Fi</string>
+    <string name="control_hotspot">نقطة اتصال</string>
+    <string name="control_split_screen">تقسيم الشاشة</string>
+
+    <!-- App Grid -->
+    <string name="app_grid_empty">لا توجد تطبيقات مرئية</string>
+    <string name="app_action_open">فتح التطبيق</string>
+    <string name="app_action_pin_slot">تثبيت في الشريط %1$d</string>
+    <string name="app_action_unpin">إزالة التثبيت</string>
+    <string name="app_action_rename">إعادة تسمية</string>
+    <string name="app_action_hide">إخفاء التطبيق</string>
+    <string name="app_action_move_left">نقل للأمام</string>
+    <string name="app_action_move_right">نقل للخلف</string>
+    <string name="app_action_split">تقسيم الشاشة</string>
+    <string name="rename_dialog_title">إعادة تسمية التطبيق</string>
+    <string name="rename_hint">اسم العرض</string>
+    <string name="action_save">حفظ</string>
+    <string name="action_cancel">إلغاء</string>
+
+    <!-- Split App Picker -->
+    <string name="split_title">تطبيقات تقسيم الشاشة</string>
+    <string name="split_subtitle">اختر تطبيقين لتشغيلهما جنباً إلى جنب في وضع تعدد النوافذ.</string>
+    <string name="split_primary">التطبيق الأساسي</string>
+    <string name="split_secondary">التطبيق الثانوي</string>
+    <string name="split_launch">تشغيل العرض المقسم</string>
+
+    <!-- OLED Night Dimmer -->
+    <string name="oled_tap_to_wake">اضغط في أي مكان لإيقاظ CarPlay</string>
+
+    <!-- Valet Mode -->
+    <string name="valet_enter_pin">أدخل رمز المرور</string>
+    <string name="valet_wrong_pin">رمز المرور غير صحيح</string>
+
+    <!-- Settings Screen -->
+    <string name="settings_title">الإعدادات</string>
+    <string name="settings_cat_geometry">الشاشة والتخطيط</string>
+    <string name="settings_cat_appearance">المظهر والخلفية</string>
+    <string name="settings_cat_apps">التطبيقات وحزم الأيقونات</string>
+    <string name="settings_cat_navigation">الخرائط ومراقب السرعة</string>
+    <string name="settings_cat_security">قفل الضيف والنسخ الاحتياطي</string>
+
+    <string name="setting_icon_size">حجم الأيقونات</string>
+    <string name="setting_corner_radius">استدارة الحواف</string>
+    <string name="setting_card_alpha">شفافية البطاقات</string>
+    <string name="setting_font_scale">حجم الخط</string>
+    <string name="setting_dock_side">جهة السائق (الشريط الجانبي)</string>
+    <string name="dock_left">يسار</string>
+    <string name="dock_right">يمين</string>
+
+    <string name="setting_day_night">المظهر</string>
+    <string name="mode_auto">تلقائي</string>
+    <string name="mode_day">نهاري دائماً</string>
+    <string name="mode_night">ليلي دائماً</string>
+    <string name="setting_wallpapers">الخلفية</string>
+    <string name="wallpaper_ios18">iOS 18</string>
+    <string name="wallpaper_ios17">iOS 17</string>
+    <string name="wallpaper_obsidian">أسود نقي</string>
+    <string name="wallpaper_custom">مخصصة</string>
+    <string name="action_pick_wallpaper">اختيار صورة…</string>
+
+    <string name="setting_icon_packs">حزم الأيقونات</string>
+    <string name="icon_pack_system">افتراضي Apple CarPlay</string>
+    <string name="icon_pack_none">لا توجد حزم أيقونات خارجية مثبتة</string>
+    <string name="setting_hidden_apps">التطبيقات المخفية</string>
+    <string name="action_unhide">إظهار</string>
+    <string name="setting_pinned_slots">تطبيقات الشريط المثبتة</string>
+    <string name="action_clear_slot">تلقائي</string>
+
+    <string name="setting_nav_app">مزود الملاحة</string>
+    <string name="setting_home_address">عنوان المنزل</string>
+    <string name="setting_work_address">عنوان العمل</string>
+    <string name="setting_speed_guard">تنبيه تجاوز السرعة</string>
+    <string name="setting_speed_limit">الحد الأقصى للسرعة</string>
+    <string name="setting_speed_unit">وحدة السرعة</string>
+
+    <string name="setting_valet_mode">وضع الضيف (قفل الإعدادات)</string>
+    <string name="setting_valet_pin">رمز المرور (4 أرقام)</string>
+    <string name="setting_backup_title">النسخ الاحتياطي والاستعادة</string>
+    <string name="action_export_backup">تصدير الإعدادات</string>
+    <string name="action_import_backup">استيراد الإعدادات</string>
+    <string name="action_default_launcher">تطبيق الرئيسية الافتراضي</string>
+    <string name="backup_exported">تم تصدير الإعدادات بنجاح</string>
+    <string name="backup_imported">تمت استعادة الإعدادات بنجاح</string>
+    <string name="backup_failed">تعذر معالجة ملف النسخة الاحتياطية</string>
+
+    <!-- Dock Slot Replacement Picker -->
+    <string name="dock_picker_title">تبديل أيقونة الشريط %1$d</string>
+    <string name="dock_picker_subtitle">اختر أي تطبيق مثبت على جهازك لتثبيته هنا</string>
+    <string name="dock_picker_search">ابحث عن تطبيق…</string>
+
+    <!-- Dynamic Widget Pages & Edit Mode -->
+    <string name="widget_edit_button">تعديل</string>
+    <string name="widget_done">تم</string>
+    <string name="widget_add_button">إضافة ويدجت</string>
+    <string name="widget_add_page">صفحة جديدة</string>
+    <string name="widget_delete_page">حذف الصفحة</string>
+    <string name="widget_gallery_title">إضافة ويدجت</string>
+    <string name="action_close">إغلاق</string>
+    <string name="widget_tap_to_move">نقل</string>
+    <string name="widget_tap_swap_target">اختر الهدف</string>
+    <string name="widget_empty_page_title">صفحة %1$d</string>
+    <string name="widget_empty_page_desc">اضغط لإضافة ويدجت بأسلوب CarPlay</string>
+
+    <!-- Widget Catalog Titles & Descriptions -->
+    <string name="widget_nav_map">خريطة الملاحة</string>
+    <string name="widget_nav_map_desc">خريطة تفاعلية كاملة مع حد السرعة والاختصارات</string>
+    <string name="widget_mini_map">خريطة مصغرة</string>
+    <string name="widget_mini_map_desc">خريطة مدمجة حية واتجاه GPS</string>
+    <string name="widget_media">قيد التشغيل</string>
+    <string name="widget_media_desc">مشغل موسيقى وبودكاست شامل</string>
+    <string name="widget_weather">الطقس</string>
+    <string name="widget_weather_desc">حالة الطقس المحلية، الرياح والعظمى/الصغرى</string>
+    <string name="widget_analog_clock">ساعة تناظرية</string>
+    <string name="widget_analog_clock_desc">مينا ساعة أبل الكلاسيكي بعقرب ثوانٍ</string>
+    <string name="widget_digital_clock">ساعة رقمية</string>
+    <string name="widget_digital_clock_desc">وقت كبير واضح وتاريخ ومدة القيادة</string>
+    <string name="widget_speed_contacts">اتصال سريع</string>
+    <string name="widget_speed_contacts_desc">اختصارات اتصال بلمسة واحدة أثناء القيادة</string>
+    <string name="widget_vehicle_battery">السيارة والبطارية</string>
+    <string name="widget_vehicle_battery_desc">نسبة الشحن، الحرارة، والاتصالات اللاسلكية</string>
+    <string name="widget_turn_speed">التوجيه والسرعة</string>
+    <string name="widget_turn_speed_desc">عداد السرعة الحي وتنبيه تجاوز الحد</string>
+    <string name="widget_calendar">التقويم والرحلة</string>
+    <string name="widget_calendar_desc">الموعد القادم ومؤقت مدة القيادة</string>
+    <string name="widget_quick_controls">التحكم السريع</string>
+    <string name="widget_quick_controls_desc">بلوتوث، واي فاي، نقطة اتصال وتقسيم الشاشة</string>
+    <string name="widget_trip_odometer">معلومات الرحلة</string>
+    <string name="widget_trip_odometer_desc">مدة الرحلة، السرعة الحالية والسرعة القصوى</string>
+
+    <!-- Weather, Contacts & Vehicle Strings -->
+    <string name="weather_location_needed">اسمح بالموقع لعرض الطقس المحلي المباشر</string>
+    <string name="weather_loading">جاري تحديث الطقس…</string>
+    <string name="weather_waiting_gps">في انتظار إشارة GPS لتحميل الطقس</string>
+    <string name="weather_wind">الرياح</string>
+    <string name="weather_precip">الأمطار</string>
+    <string name="weather_feels_like">المحسوسة</string>
+    <string name="weather_clear">صحو</string>
+    <string name="weather_partly_cloudy">غائم جزئياً</string>
+    <string name="weather_cloudy">غائم</string>
+    <string name="weather_fog">ضباب</string>
+    <string name="weather_rain">ممطر</string>
+    <string name="weather_snow">ثلوج</string>
+    <string name="weather_storm">عاصفة رعدية</string>
+
+    <string name="contacts_tap_to_call">اضغط للاتصال</string>
+    <string name="contacts_set_number">اضغط لإضافة رقم</string>
+    <string name="contacts_edit_title">اختصار اتصال سريع</string>
+    <string name="contacts_name_hint">الاسم</string>
+    <string name="contacts_phone_hint">رقم الهاتف</string>
+
+    <string name="vehicle_charging">متصل بالشاحن</string>
+    <string name="vehicle_on_battery">يعمل على البطارية</string>
+    <string name="trip_current_speed">الحالية</string>
+    <string name="trip_peak_speed">القصوى</string>
+
+    <!-- Smart Driver & Customization Extensions -->
+    <string name="pitstop_toggle">خدمات الطريق</string>
+    <string name="pitstop_fuel">وقود</string>
+    <string name="pitstop_ev">شحن EV</string>
+    <string name="pitstop_coffee">قهوة</string>
+    <string name="pitstop_parking">مواقف</string>
+    <string name="pitstop_hospital">طوارئ</string>
+
+    <string name="parked_pin_save">حفظ الموقف</string>
+    <string name="parked_pin_go">موقع سيارتي</string>
+    <string name="parked_pin_saved_msg">تم حفظ موقع السيارة عبر GPS</string>
+    <string name="parked_pin_cleared_msg">تم مسح موقع الركن المحفوظ</string>
+    <string name="parked_no_gps_msg">يلزم توفر إشارة GPS لحفظ الموقف</string>
+    <string name="parked_age_mins">%1$dد</string>
+
+    <string name="focus_mode_label">تركيز الطريق</string>
+    <string name="focus_mode_on">تم تفعيل وضع تركيز الطريق</string>
+    <string name="focus_mode_off">تم إيقاف وضع تركيز الطريق</string>
+    <string name="control_highway_focus">تركيز</string>
+
+    <string name="break_alert_title">قيادة متواصلة — هل تحتاج استراحة؟</string>
+    <string name="break_alert_find_coffee">أقرب استراحة</string>
+    <string name="break_alert_reset">إعادة</string>
+    <string name="trip_timer_reset_msg">تمت إعادة مؤقت القيادة والسرعة القصوى</string>
+
+    <string name="setting_night_warmth">إضاءة ليلية مريحة للعين</string>
+    <string name="setting_highway_focus_auto">تركيز الطريق التلقائي (+72 كم/س)</string>
+    <string name="setting_break_reminder">تنبيه استراحة القيادة</string>
+    <string name="setting_break_minutes">%1$d دقيقة</string>
+    <string name="setting_reset_widgets">استعادة صفحات الويدجت</string>
+    <string name="setting_reset_widgets_msg">تمت استعادة تخطيط الويدجت الافتراضي</string>
+    <string name="setting_live_preview">معاينة زجاجية حية لـ CarPlay</string>
+</resources>
